@@ -61,10 +61,10 @@ const viewSubtitles = {
 };
 
 const colors = {
-  needs: "#10b981",
-  wants: "#f59e0b",
-  savings: "#3b82f6",
-  vr: "#ec4899",
+  needs: "#10B981",
+  wants: "#FDB72D",
+  savings: "#3B82F6",
+  vr: "#EC4899",
 };
 
 /* Application State */
@@ -321,11 +321,22 @@ async function handleAuthSubmit(event) {
     els.authDialog.close();
     els.authForm.reset();
   } catch (error) {
+    console.error("Firebase Auth Error:", error);
     let msg = "Erro ao autenticar. Verifique seus dados.";
-    if (error.code === "auth/email-already-in-use") msg = "Este e-mail já está cadastrado. Tente entrar.";
-    else if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") msg = "E-mail ou senha incorretos.";
-    else if (error.code === "auth/weak-password") msg = "A senha deve ter pelo menos 6 caracteres.";
-    else if (error.code === "auth/invalid-email") msg = "Formato de e-mail inválido.";
+    
+    if (error.code === "auth/operation-not-allowed") {
+      msg = "O método E-mail/Senha não está ativado no Firebase Console. Ative-o em Authentication > Sign-in method no projeto mapeamento-esportivo.";
+    } else if (error.code === "auth/email-already-in-use") {
+      msg = "Este e-mail já está cadastrado. Alterne para a aba 'Entrar'.";
+    } else if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential" || error.code === "auth/user-not-found") {
+      msg = "E-mail ou senha incorretos.";
+    } else if (error.code === "auth/weak-password") {
+      msg = "A senha deve ter pelo menos 6 caracteres.";
+    } else if (error.code === "auth/invalid-email") {
+      msg = "Formato de e-mail inválido.";
+    } else if (error.message) {
+      msg = `${error.message} (${error.code || 'erro'})`;
+    }
     
     showAlert(els.authMessage, msg);
   } finally {
@@ -735,7 +746,7 @@ function recalculateAndRender() {
 
 /* ==========================================================================
    RENDERERS & VIEWS
-   ========================================================================== */
+   ========================================================================= */
 
 function setView(view) {
   state.currentView = view;
@@ -850,7 +861,7 @@ function drawDistributionChart(canvas) {
   const innerRadius = outerRadius * 0.58;
 
   if (!total) {
-    ctx.fillStyle = "#94a3b8";
+    ctx.fillStyle = "#8C877D";
     ctx.font = "600 14px 'Plus Jakarta Sans', system-ui";
     ctx.textAlign = "center";
     ctx.fillText("Nenhum gasto registrado", canvas.width * 0.5, canvas.height * 0.5);
@@ -873,11 +884,11 @@ function drawDistributionChart(canvas) {
   // Center Total
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "#64748b";
-  ctx.font = "700 10px 'Plus Jakarta Sans', system-ui";
+  ctx.fillStyle = "#57534E";
+  ctx.font = "800 10px 'Plus Jakarta Sans', system-ui";
   ctx.fillText("TOTAL GASTO", cx, cy - 8);
-  ctx.fillStyle = "#0f172a";
-  ctx.font = "800 13px 'Plus Jakarta Sans', system-ui";
+  ctx.fillStyle = "#070604";
+  ctx.font = "800 14px 'Plus Jakarta Sans', system-ui";
   ctx.fillText(money(total), cx, cy + 10);
 
   // Legend List
@@ -894,12 +905,12 @@ function drawDistributionChart(canvas) {
     ctx.fill();
 
     // Text Label
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "700 12px 'Plus Jakarta Sans', system-ui";
+    ctx.fillStyle = "#070604";
+    ctx.font = "800 12px 'Plus Jakarta Sans', system-ui";
     ctx.fillText(`${item.label} (${pct}%)`, canvas.width * 0.62 + 16, y);
 
     // Value
-    ctx.fillStyle = "#64748b";
+    ctx.fillStyle = "#57534E";
     ctx.font = "600 11px 'Plus Jakarta Sans', system-ui";
     ctx.fillText(money(item.value), canvas.width * 0.62 + 16, y + 16);
   });
@@ -915,7 +926,7 @@ function drawTimelineChart(canvas) {
     .sort((a, b) => a.date.localeCompare(b.date));
 
   if (!expenses.length) {
-    ctx.fillStyle = "#94a3b8";
+    ctx.fillStyle = "#8C877D";
     ctx.font = "600 14px 'Plus Jakarta Sans', system-ui";
     ctx.textAlign = "center";
     ctx.fillText("Sem despesas no período selecionado", canvas.width * 0.5, canvas.height * 0.5);
@@ -941,7 +952,7 @@ function drawTimelineChart(canvas) {
   const chartHeight = canvas.height - padTop - padBottom;
 
   // Grid Lines
-  ctx.strokeStyle = "#f1f5f9";
+  ctx.strokeStyle = "#E5DFC9";
   ctx.lineWidth = 1;
   for (let i = 0; i <= 3; i++) {
     const y = padTop + (chartHeight / 3) * i;
@@ -951,10 +962,10 @@ function drawTimelineChart(canvas) {
     ctx.stroke();
   }
 
-  // Draw Area Gradient
+  // Draw Area Gradient (Gold Amber)
   const gradient = ctx.createLinearGradient(0, padTop, 0, canvas.height - padBottom);
-  gradient.addColorStop(0, "rgba(13, 148, 136, 0.25)");
-  gradient.addColorStop(1, "rgba(13, 148, 136, 0.0)");
+  gradient.addColorStop(0, "rgba(253, 183, 45, 0.35)");
+  gradient.addColorStop(1, "rgba(253, 183, 45, 0.0)");
 
   ctx.beginPath();
   points.forEach((point, index) => {
@@ -973,8 +984,8 @@ function drawTimelineChart(canvas) {
   ctx.fill();
 
   // Draw Line
-  ctx.strokeStyle = "#0d9488";
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = "#E5A324";
+  ctx.lineWidth = 3;
   ctx.lineJoin = "round";
   ctx.beginPath();
   points.forEach((point, index) => {
@@ -989,21 +1000,21 @@ function drawTimelineChart(canvas) {
   const lastPoint = points[points.length - 1];
   const lastX = canvas.width - padRight;
   const lastY = canvas.height - padBottom - (lastPoint.total / max) * chartHeight;
-  ctx.fillStyle = "#0d9488";
+  ctx.fillStyle = "#E5A324";
   ctx.beginPath();
-  ctx.arc(lastX, lastY, 5, 0, Math.PI * 2);
+  ctx.arc(lastX, lastY, 6, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = "#070604";
   ctx.beginPath();
-  ctx.arc(lastX, lastY, 2.5, 0, Math.PI * 2);
+  ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
   ctx.fill();
 
   // Header stats
   ctx.textAlign = "left";
-  ctx.fillStyle = "#64748b";
-  ctx.font = "600 12px 'Plus Jakarta Sans', system-ui";
+  ctx.fillStyle = "#57534E";
+  ctx.font = "700 12px 'Plus Jakarta Sans', system-ui";
   ctx.fillText(`Acumulado final: `, padLeft, 18);
-  ctx.fillStyle = "#0f172a";
+  ctx.fillStyle = "#070604";
   ctx.font = "800 12px 'Plus Jakarta Sans', system-ui";
   ctx.fillText(money(lastPoint.total), padLeft + 95, 18);
 }
@@ -1235,11 +1246,12 @@ function showAlert(el, msg) {
   clearTimeout(el.timeout);
   el.timeout = setTimeout(() => {
     hideAlert(el);
-  }, 4000);
+  }, 5000);
 }
 
 function hideAlert(el) {
   el.hidden = true;
   el.textContent = "";
 }
+
 
