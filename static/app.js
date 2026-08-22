@@ -163,6 +163,9 @@ document.addEventListener("DOMContentLoaded", () => {
   hydrateFilterFields();
   setupCurrencyMasks();
 
+  // Load guest data initially
+  loadGuestData();
+
   // Listen to Firebase Auth state in real time
   onAuthStateChanged(auth, async (user) => {
     state.user = user;
@@ -171,9 +174,7 @@ document.addEventListener("DOMContentLoaded", () => {
       await loadUserData();
     } else {
       updateGuestUI();
-      state.settings = { monthly_income_cents: 0, vr_initial_balance_cents: 0 };
-      state.rawEntries = [];
-      recalculateAndRender();
+      loadGuestData();
     }
   });
 });
@@ -226,14 +227,7 @@ function wireEvents() {
   });
 
   // Entry Modal Triggers (Desktop & Mobile)
-  const triggerEntry = () => {
-    if (!state.user) {
-      openAuthDialog();
-      showToast("Faça login para salvar seus lançamentos.");
-      return;
-    }
-    openEntryDialog();
-  };
+  const triggerEntry = () => openEntryDialog();
 
   const openEntryDesktop = document.querySelector("#open-entry");
   if (openEntryDesktop) openEntryDesktop.addEventListener("click", triggerEntry);
@@ -321,14 +315,14 @@ async function handleGoogleAuth() {
     els.authDialog.close();
   } catch (error) {
     console.error("Google Auth Error:", error);
-    if (error.code === "auth/popup-closed-by-user") {
-      return; // Usuário fechou o pop-up, nenhuma ação necessária
+    if (error.code === "auth/popup-closed-by-user" || error.code === "auth/cancelled-popup-request") {
+      return;
     }
     let msg = "Erro ao autenticar com o Google.";
-    if (error.code === "auth/operation-not-allowed") {
+    if (error.code === "auth/unauthorized-domain") {
+      msg = "Domínio não autorizado pelo Firebase. Ao testar localmente, acesse por 'http://localhost:8080' ou acesse o app publicado no Firebase Hosting.";
+    } else if (error.code === "auth/operation-not-allowed") {
       msg = "O login com o Google precisa ser ativado no Firebase Console (Authentication > Sign-in method).";
-    } else if (error.code === "auth/unauthorized-domain") {
-      msg = "Este domínio não está autorizado no Firebase Console.";
     } else if (error.message) {
       msg = `${error.message} (${error.code || 'erro'})`;
     }
@@ -392,7 +386,7 @@ async function handleAuthSubmit(event) {
 async function handleLogout() {
   try {
     await signOut(auth);
-    showToast("Sessão finalizada com sucesso.");
+    showToast("Sessão finalizada.");
   } catch (error) {
     showToast("Erro ao deslogar.");
   }
@@ -428,24 +422,50 @@ function updateGuestUI() {
 }
 
 /* ==========================================================================
-   FIRESTORE DATA MANAGEMENT
+   GUEST (LOCALSTORAGE) & CLOUD (FIRESTORE) DATA MANAGEMENT
    ========================================================================== */
+
+function loadGuestData() {
+  try {
+    const savedSettings = localStorage.getItem("finflow_guest_settings");
+    state.settings = savedSettings ? JSON.parse(savedSettings) : { monthly_income_cents: 0, vr_initial_balance_cents: 0 };
+
+    const savedEntries = localStorage.getItem("finflow_guest_entries");
+    state.rawEntries = savedEntries ? JSON.parse(savedEntries) : [];
+  } catch (e) {
+    state.settings = { monthly_income_cents: 0, vr_initial_balance_cents: 0 };
+    state.rawEntries = [];
+  }
+  recalculateAndRender();
+}
+
+function saveGuestData() {
+  try {
+    localStorage.setItem("finflow_guest_settings", JSON.stringify(state.settings));
+    localStorage.setItem("finflow_guest_entries", JSON.stringify(state.rawEntries));
+  } catch (e) {
+    console.warn("LocalStorage save error:", e);
+  }
+}
 
 async function loadUserData() {
   if (!state.user) return;
   const uid = state.user.uid;
 
   try {
-    // 1. Load user settings
+    // 1. Load user settings from Firestore
     const settingsDocRef = doc(db, "users", uid, "settings", "config");
     const settingsSnap = await getDoc(settingsDocRef);
     if (settingsSnap.exists()) {
       state.settings = settingsSnap.data();
     } else {
-      state.settings = { monthly_income_cents: 0, vr_initial_balance_cents: 0 };
+      // If user had local guest settings, migrate them
+      if (state.settings.monthly_income_cents > 0 || state.settings.vr_initial_balance_cents > 0) {
+        await setDoc(settingsDocRef, { ...state.settings, updatedAt: new Date().toISOString() });
+      }
     }
 
-    // 2. Load user entries
+    // 2. Load user entries from Firestore
     const entriesCol = collection(db, "users", uid, "entries");
     const entriesQuery = query(entriesCol, orderBy("date", "desc"));
     const querySnapshot = await getDocs(entriesQuery);
@@ -455,34 +475,54 @@ async function loadUserData() {
       state.rawEntries.push({ id: d.id, ...d.data() });
     });
 
+    // Check if there are local guest entries to migrate
+    const guestEntries = JSON.parse(localStorage.getItem("finflow_guest_entries") || "[]");
+    if (guestEntries.length > 0 && state.rawEntries.length === 0) {
+      for (const entry of guestEntries) {
+        const { id, ...entryData } = entry;
+        const newDoc = await addDoc(collection(db, "users", uid, "entries"), {
+          ...entryData,
+          createdAt: entryData.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        state.rawEntries.push({ id: newDoc.id, ...entryData });
+      }
+      localStorage.removeItem("finflow_guest_entries");
+      showToast("Seus lançamentos locais foram sincronizados na nuvem!");
+    }
+
     recalculateAndRender();
   } catch (error) {
     console.error("Erro ao carregar dados do Firestore:", error);
-    showToast("Erro ao sincronizar com o banco de dados.");
+    showToast("Aviso: operando com dados locais.");
   }
 }
 
 async function handleSettingsSubmit(event) {
   event.preventDefault();
-  if (!state.user) {
-    openAuthDialog();
-    showToast("Faça login para salvar suas configurações.");
-    return;
-  }
-
   els.settingsMessage.textContent = "";
+
   try {
+    const monthly_income_cents = parseMoney(els.settingsForm.monthly_income.value);
+    const vr_initial_balance_cents = parseMoney(els.settingsForm.vr_initial.value);
+
     const body = {
-      monthly_income_cents: parseMoney(els.settingsForm.monthly_income.value),
-      vr_initial_balance_cents: parseMoney(els.settingsForm.vr_initial.value),
+      monthly_income_cents,
+      vr_initial_balance_cents,
       updatedAt: new Date().toISOString(),
     };
 
-    const settingsDocRef = doc(db, "users", state.user.uid, "settings", "config");
-    await setDoc(settingsDocRef, body, { merge: true });
-
     state.settings = body;
-    showToast("Renda e VR atualizados com sucesso!");
+
+    if (state.user) {
+      const settingsDocRef = doc(db, "users", state.user.uid, "settings", "config");
+      await setDoc(settingsDocRef, body, { merge: true });
+      showToast("Renda e VR sincronizados na nuvem!");
+    } else {
+      saveGuestData();
+      showToast("Renda e VR salvos localmente!");
+    }
+
     els.settingsMessage.textContent = "Alterações salvas!";
     setTimeout(() => {
       els.settingsMessage.textContent = "";
@@ -554,70 +594,105 @@ function setEntryKind(kind) {
 
 async function handleEntrySubmit(event) {
   event.preventDefault();
-  if (!state.user) {
-    els.entryDialog.close();
-    openAuthDialog();
-    showToast("Faça login para salvar seus lançamentos.");
-    return;
-  }
-
   hideAlert(els.entryMessage);
+
   const data = Object.fromEntries(new FormData(els.entryForm));
 
   try {
-    const value_cents = parseMoney(data.value);
-    if (!value_cents) throw new Error("Informe um valor maior que zero.");
+    const rawVal = data.value || els.entryValueInput.value;
+    const value_cents = parseMoney(rawVal);
+    if (!value_cents || value_cents <= 0) {
+      throw new Error("Informe um valor maior que zero.");
+    }
+
+    const description = (data.description || "").trim();
+    if (!description) {
+      throw new Error("Informe a descrição do lançamento.");
+    }
+
+    const category = (data.category || "").trim() || "Geral";
+    const payment_method = (data.payment_method || "").trim() || "Outros";
+    const date = data.date || toDateInput(new Date());
+    const budget_type = els.hiddenBudgetType.value || "needs";
+    const entry_kind = els.hiddenEntryKind.value || "expense";
+    const note = (data.note || "").trim();
 
     const payload = {
-      budget_type: els.hiddenBudgetType.value,
-      entry_kind: els.hiddenEntryKind.value,
-      description: data.description.trim(),
-      category: data.category.trim(),
+      budget_type,
+      entry_kind,
+      description,
+      category,
       value_cents,
-      date: data.date,
-      payment_method: data.payment_method.trim(),
-      note: data.note ? data.note.trim() : "",
+      date,
+      payment_method,
+      note,
       updatedAt: new Date().toISOString(),
     };
 
     const isEdit = Boolean(data.id);
-    const uid = state.user.uid;
 
-    if (isEdit) {
-      const entryRef = doc(db, "users", uid, "entries", data.id);
-      await updateDoc(entryRef, payload);
-      showToast("Lançamento atualizado com sucesso!");
+    if (state.user) {
+      const uid = state.user.uid;
+      if (isEdit) {
+        const entryRef = doc(db, "users", uid, "entries", data.id);
+        await updateDoc(entryRef, payload);
+        showToast("Lançamento atualizado na nuvem!");
+      } else {
+        payload.createdAt = new Date().toISOString();
+        await addDoc(collection(db, "users", uid, "entries"), payload);
+        showToast("Novo lançamento salvo na nuvem!");
+      }
+      await loadUserData();
     } else {
-      payload.createdAt = new Date().toISOString();
-      await addDoc(collection(db, "users", uid, "entries"), payload);
-      showToast("Novo lançamento adicionado!");
+      // LocalStorage fallback for guests / offline
+      if (isEdit) {
+        const idx = state.rawEntries.findIndex((e) => e.id === data.id);
+        if (idx !== -1) state.rawEntries[idx] = { ...state.rawEntries[idx], ...payload };
+        showToast("Lançamento atualizado localmente!");
+      } else {
+        payload.id = "local_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+        payload.createdAt = new Date().toISOString();
+        state.rawEntries.unshift(payload);
+        showToast("Novo lançamento salvo!");
+      }
+      saveGuestData();
+      recalculateAndRender();
     }
 
     els.entryDialog.close();
-    await loadUserData();
   } catch (error) {
+    console.error("Erro ao salvar lançamento:", error);
     showAlert(els.entryMessage, error.message);
+    showToast(error.message, 3500);
   }
 }
 
 async function handleEntryDelete() {
   const id = els.entryForm.id.value;
-  if (!id || !state.user) return;
+  if (!id) return;
 
   const confirmed = await showConfirm(
     "Excluir este lançamento?",
-    "Esta ação removerá a movimentação permanentemente do banco de dados."
+    "Esta ação removerá a movimentação permanentemente."
   );
 
   if (!confirmed) return;
 
   try {
-    await deleteDoc(doc(db, "users", state.user.uid, "entries", id));
+    if (state.user && !id.startsWith("local_")) {
+      await deleteDoc(doc(db, "users", state.user.uid, "entries", id));
+      await loadUserData();
+    } else {
+      state.rawEntries = state.rawEntries.filter((e) => e.id !== id);
+      saveGuestData();
+      recalculateAndRender();
+    }
+
     els.entryDialog.close();
     showToast("Lançamento excluído com sucesso.");
-    await loadUserData();
   } catch (error) {
     showAlert(els.entryMessage, error.message);
+    showToast(error.message, 3500);
   }
 }
 
@@ -1233,17 +1308,20 @@ function setupCurrencyMasks() {
    ========================================================================== */
 
 function parseMoney(value) {
-  const raw = String(value || "")
-    .replace(/\s/g, "")
-    .replace("R$", "")
-    .replace(/\./g, "")
-    .replace(",", ".");
-
-  if (!raw || Number.isNaN(Number(raw))) {
+  if (typeof value === "number") return Math.round(value);
+  let raw = String(value || "").trim().replace(/\s/g, "").replace("R$", "");
+  if (!raw) return 0;
+  
+  if (raw.includes(",") && raw.includes(".")) {
+    raw = raw.replace(/\./g, "").replace(",", ".");
+  } else if (raw.includes(",")) {
+    raw = raw.replace(",", ".");
+  }
+  
+  const number = Number(raw);
+  if (Number.isNaN(number) || number < 0) {
     throw new Error("Informe um valor numérico válido.");
   }
-  const number = Number(raw);
-  if (number < 0) throw new Error("Valores negativos não são permitidos.");
   return Math.round(number * 100);
 }
 
