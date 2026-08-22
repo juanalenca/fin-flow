@@ -7,6 +7,8 @@ import {
   getAuth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
   updateProfile,
@@ -40,6 +42,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
 /* Labels & Visual Themes */
 const labels = {
@@ -85,8 +89,9 @@ const els = {
   authUnloggedWidget: document.querySelector("#auth-unlogged-widget"),
   authLoggedWidget: document.querySelector("#auth-logged-widget"),
   openAuthBtn: document.querySelector("#open-auth-btn"),
-  mobileAuthBtn: document.querySelector("#mobile-auth-btn"),
-  mobileAuthLabel: document.querySelector("#mobile-auth-label"),
+  mobileAuthTrigger: document.querySelector("#mobile-auth-trigger"),
+  mobileUserAvatar: document.querySelector("#mobile-user-avatar"),
+  googleAuthBtn: document.querySelector("#google-auth-btn"),
   authDialog: document.querySelector("#auth-dialog"),
   closeAuth: document.querySelector("#close-auth"),
   authForm: document.querySelector("#auth-form"),
@@ -99,6 +104,11 @@ const els = {
   userDisplayName: document.querySelector("#user-display-name"),
   userEmail: document.querySelector("#user-email"),
   userAvatarInitials: document.querySelector("#user-avatar-initials"),
+
+  // Mobile Topbar Actions
+  mobileOpenEntry: document.querySelector("#mobile-open-entry"),
+  mobileViewTitle: document.querySelector("#mobile-view-title"),
+  mobileViewSubtitle: document.querySelector("#mobile-view-subtitle"),
 
   // Settings
   toggleSettingsBtn: document.querySelector("#toggle-settings-btn"),
@@ -175,14 +185,19 @@ document.addEventListener("DOMContentLoaded", () => {
 function wireEvents() {
   // Open / Close Auth Dialog
   if (els.openAuthBtn) els.openAuthBtn.addEventListener("click", () => openAuthDialog());
-  if (els.mobileAuthBtn) els.mobileAuthBtn.addEventListener("click", () => {
-    if (state.user) {
-      showToast(`Conectado como ${state.user.email}`);
-    } else {
-      openAuthDialog();
-    }
-  });
+  if (els.mobileAuthTrigger) {
+    els.mobileAuthTrigger.addEventListener("click", () => {
+      if (state.user) {
+        showToast(`Conectado como ${state.user.email}`);
+      } else {
+        openAuthDialog();
+      }
+    });
+  }
   if (els.closeAuth) els.closeAuth.addEventListener("click", () => els.authDialog.close());
+
+  // Google Login
+  if (els.googleAuthBtn) els.googleAuthBtn.addEventListener("click", handleGoogleAuth);
 
   // Auth Mode Tabs
   document.querySelectorAll("[data-auth-mode]").forEach((btn) => {
@@ -210,15 +225,20 @@ function wireEvents() {
     btn.addEventListener("click", () => setView(btn.dataset.view));
   });
 
-  // Entry Modal Triggers
-  document.querySelector("#open-entry").addEventListener("click", () => {
+  // Entry Modal Triggers (Desktop & Mobile)
+  const triggerEntry = () => {
     if (!state.user) {
       openAuthDialog();
       showToast("Faça login para salvar seus lançamentos.");
       return;
     }
     openEntryDialog();
-  });
+  };
+
+  const openEntryDesktop = document.querySelector("#open-entry");
+  if (openEntryDesktop) openEntryDesktop.addEventListener("click", triggerEntry);
+  if (els.mobileOpenEntry) els.mobileOpenEntry.addEventListener("click", triggerEntry);
+
   document.querySelector("#close-entry").addEventListener("click", () => els.entryDialog.close());
   document.querySelector("#cancel-entry").addEventListener("click", () => els.entryDialog.close());
   els.entryForm.addEventListener("submit", handleEntrySubmit);
@@ -261,7 +281,7 @@ function wireEvents() {
 }
 
 /* ==========================================================================
-   AUTHENTICATION LOGIC (FIREBASE AUTH)
+   AUTHENTICATION LOGIC (FIREBASE AUTH - EMAIL & GOOGLE)
    ========================================================================== */
 
 function openAuthDialog(mode = "login") {
@@ -283,13 +303,37 @@ function setAuthMode(mode) {
     els.authForm.password.autocomplete = "new-password";
   } else {
     els.authModalTitle.textContent = "Acesse sua conta";
-    els.authModalSubtitle.textContent = "Sincronize seus dados financeiros com segurança.";
+    els.authModalSubtitle.textContent = "Sincronize seus dados financeiros com segurança no Firebase.";
     els.nameField.hidden = true;
     els.authSubmitBtn.querySelector("span").textContent = "Entrar no FinFlow";
     els.authForm.password.autocomplete = "current-password";
   }
 
   hideAlert(els.authMessage);
+}
+
+async function handleGoogleAuth() {
+  hideAlert(els.authMessage);
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    const user = result.user;
+    showToast(`Bem-vindo(a), ${user.displayName || user.email}!`);
+    els.authDialog.close();
+  } catch (error) {
+    console.error("Google Auth Error:", error);
+    if (error.code === "auth/popup-closed-by-user") {
+      return; // Usuário fechou o pop-up, nenhuma ação necessária
+    }
+    let msg = "Erro ao autenticar com o Google.";
+    if (error.code === "auth/operation-not-allowed") {
+      msg = "O login com o Google precisa ser ativado no Firebase Console (Authentication > Sign-in method).";
+    } else if (error.code === "auth/unauthorized-domain") {
+      msg = "Este domínio não está autorizado no Firebase Console.";
+    } else if (error.message) {
+      msg = `${error.message} (${error.code || 'erro'})`;
+    }
+    showAlert(els.authMessage, msg);
+  }
 }
 
 async function handleAuthSubmit(event) {
@@ -359,17 +403,28 @@ function updateUserUI(user) {
   els.authLoggedWidget.hidden = false;
 
   const displayName = user.displayName || user.email.split("@")[0];
+  const initial = displayName.charAt(0).toUpperCase();
+
   els.userDisplayName.textContent = displayName;
   els.userEmail.textContent = user.email;
-  els.userAvatarInitials.textContent = displayName.charAt(0).toUpperCase();
+  els.userAvatarInitials.textContent = initial;
 
-  if (els.mobileAuthLabel) els.mobileAuthLabel.textContent = displayName.split(" ")[0];
+  if (els.mobileUserAvatar) {
+    els.mobileUserAvatar.textContent = initial;
+    els.mobileUserAvatar.style.background = "var(--primary)";
+    els.mobileUserAvatar.style.color = "#070604";
+  }
 }
 
 function updateGuestUI() {
   els.authUnloggedWidget.hidden = false;
   els.authLoggedWidget.hidden = true;
-  if (els.mobileAuthLabel) els.mobileAuthLabel.textContent = "Entrar";
+
+  if (els.mobileUserAvatar) {
+    els.mobileUserAvatar.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+    els.mobileUserAvatar.style.background = "var(--primary)";
+    els.mobileUserAvatar.style.color = "#070604";
+  }
 }
 
 /* ==========================================================================
@@ -762,9 +817,13 @@ function setView(view) {
   const targetPanel = document.querySelector(`#${targetId}`);
   if (targetPanel) targetPanel.classList.add("active");
 
-  // Update Header Titles
-  text("#view-title", labels[view] || "Visão Geral");
-  text("#view-subtitle", viewSubtitles[view] || "");
+  // Update Desktop & Mobile Header Titles
+  const viewTitle = labels[view] || "Visão Geral";
+  const viewSubtitle = viewSubtitles[view] || "";
+  text("#view-title", viewTitle);
+  text("#view-subtitle", viewSubtitle);
+  if (els.mobileViewTitle) text("#mobile-view-title", viewTitle);
+  if (els.mobileViewSubtitle) text("#mobile-view-subtitle", viewSubtitle);
 
   render();
 }

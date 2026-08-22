@@ -2,7 +2,7 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>FinFlow · Gestão Financeira Pessoal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +12,7 @@
   <body>
     <!-- WORKSPACE PRINCIPAL DA APLICAÇÃO -->
     <div id="app-view" class="app-layout">
-      <!-- BARRA LATERAL (SIDEBAR) -->
+      <!-- BARRA LATERAL (DESKTOP SIDEBAR) -->
       <aside class="app-sidebar">
         <div class="sidebar-top">
           <div class="app-brand">
@@ -98,8 +98,30 @@
 
       <!-- ÁREA DE TRABALHO (WORKSPACE) -->
       <main class="app-workspace">
-        <!-- TOPBAR -->
-        <header class="app-topbar">
+        <!-- CABEÇALHO MOBILE (EXIBIDO APENAS EM TELAS MENORES) -->
+        <header class="mobile-header-bar">
+          <div class="mobile-brand">
+            <div class="brand-badge-small">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+            </div>
+            <span class="mobile-brand-title">FinFlow</span>
+          </div>
+
+          <div class="mobile-header-actions">
+            <button id="mobile-open-entry" class="btn btn-primary btn-sm" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>Novo</span>
+            </button>
+            <button id="mobile-auth-trigger" class="mobile-avatar-btn" type="button" title="Minha conta" aria-label="Conta">
+              <div class="user-avatar" id="mobile-user-avatar">U</div>
+            </button>
+          </div>
+        </header>
+
+        <!-- TOPBAR DESKTOP -->
+        <header class="app-topbar desktop-only-topbar">
           <div class="topbar-left">
             <h1 class="page-title" id="view-title">Visão Geral</h1>
             <p class="page-subtitle" id="view-subtitle">Acompanhe seu fluxo de caixa mensal e distribuição do orçamento.</p>
@@ -111,6 +133,12 @@
             </button>
           </div>
         </header>
+
+        <!-- TÍTULO DINÂMICO MOBILE -->
+        <div class="mobile-view-heading">
+          <h1 class="mobile-page-title" id="mobile-view-title">Visão Geral</h1>
+          <p class="mobile-page-desc" id="mobile-view-subtitle">Acompanhe seu fluxo de caixa mensal.</p>
+        </div>
 
         <!-- CONFIGURAÇÕES DE RENDA (EXPANDÍVEL / COMPACTO) -->
         <section class="income-bar-card">
@@ -141,7 +169,7 @@
               </div>
             </div>
             <div class="field-actions">
-              <button class="btn btn-secondary btn-sm" type="submit">Salvar Alterações</button>
+              <button class="btn btn-secondary btn-sm" type="submit">Salvar Bases</button>
             </div>
             <div id="settings-message" class="settings-feedback" role="status"></div>
           </form>
@@ -149,11 +177,13 @@
 
         <!-- BARRA DE FILTROS INTELIGENTES -->
         <section class="filter-controls-card">
-          <div class="preset-filters" role="group" aria-label="Atalhos de Período">
-            <button type="button" class="preset-pill active" data-preset="current-month">Este Mês</button>
-            <button type="button" class="preset-pill" data-preset="prev-month">Mês Anterior</button>
-            <button type="button" class="preset-pill" data-preset="last-30">Últimos 30 dias</button>
-            <button type="button" class="preset-pill" data-preset="current-year">Ano Atual</button>
+          <div class="preset-filters-scroll">
+            <div class="preset-filters" role="group" aria-label="Atalhos de Período">
+              <button type="button" class="preset-pill active" data-preset="current-month">Este Mês</button>
+              <button type="button" class="preset-pill" data-preset="prev-month">Mês Anterior</button>
+              <button type="button" class="preset-pill" data-preset="last-30">Últimos 30 dias</button>
+              <button type="button" class="preset-pill" data-preset="current-year">Ano Atual</button>
+            </div>
           </div>
 
           <form id="filters-form" class="custom-filters-form">
@@ -170,7 +200,7 @@
             <div class="filter-search-group">
               <div class="input-with-icon search-input-wrapper">
                 <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>
-                <input name="search" placeholder="Filtrar por descrição..." autocomplete="off">
+                <input name="search" placeholder="Buscar por descrição..." autocomplete="off">
               </div>
             </div>
           </form>
@@ -184,7 +214,7 @@
               <div class="metric-top">
                 <span class="metric-label">Renda Mensal</span>
                 <div class="metric-icon-wrap">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
                 </div>
               </div>
               <strong class="metric-value" id="metric-income">R$ 0,00</strong>
@@ -193,9 +223,9 @@
 
             <div class="metric-box box-spent">
               <div class="metric-top">
-                <span class="metric-label">Total Realizado (Gastos)</span>
+                <span class="metric-label">Total Gasto</span>
                 <div class="metric-icon-wrap">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
                 </div>
               </div>
               <strong class="metric-value text-spent" id="metric-spent">R$ 0,00</strong>
@@ -206,7 +236,7 @@
               <div class="metric-top">
                 <span class="metric-label">Saldo Disponível</span>
                 <div class="metric-icon-wrap">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                 </div>
               </div>
               <strong class="metric-value text-available" id="metric-available">R$ 0,00</strong>
@@ -217,7 +247,7 @@
               <div class="metric-top">
                 <span class="metric-label">Saldo Carteira VR</span>
                 <div class="metric-icon-wrap">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
                 </div>
               </div>
               <strong class="metric-value" id="metric-vr">R$ 0,00</strong>
@@ -256,7 +286,7 @@
               <div class="card-analytics-head">
                 <div>
                   <h2 class="card-analytics-title">Evolução Acumulada de Despesas</h2>
-                  <span class="card-analytics-desc">Velocidade de gastos ao longo do período selecionado</span>
+                  <span class="card-analytics-desc">Velocidade de gastos no período</span>
                 </div>
               </div>
               <div class="canvas-wrapper">
@@ -286,10 +316,10 @@
             <div class="card-analytics-head">
               <div>
                 <h2 class="card-analytics-title">Extrato Geral de Lançamentos</h2>
-                <span class="card-analytics-desc">Todas as movimentações registradas no período selecionado</span>
+                <span class="card-analytics-desc">Todas as movimentações registradas</span>
               </div>
               <div class="entries-badge-total">
-                <span>Total no período:</span>
+                <span>Total:</span>
                 <strong id="entries-total">R$ 0,00</strong>
               </div>
             </div>
@@ -298,10 +328,10 @@
         </section>
       </main>
 
-      <!-- MOBILE BOTTOM NAVIGATION -->
+      <!-- MOBILE BOTTOM NAVIGATION (6 ATALHOS ESSENCIAIS) -->
       <nav class="mobile-nav" aria-label="Navegação Mobile">
         <button class="mobile-nav-item active" data-view="overview">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
           <span>Geral</span>
         </button>
         <button class="mobile-nav-item" data-view="needs">
@@ -321,23 +351,19 @@
           <span>VR</span>
         </button>
         <button class="mobile-nav-item" data-view="entries">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/></svg>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
           <span>Extrato</span>
-        </button>
-        <button class="mobile-nav-item" id="mobile-auth-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <span id="mobile-auth-label">Conta</span>
         </button>
       </nav>
     </div>
 
-    <!-- DIALOG: MODAL CLEAN DE AUTENTICAÇÃO (LOGIN / REGISTRO) -->
+    <!-- DIALOG: MODAL CLEAN DE AUTENTICAÇÃO (GOOGLE + EMAIL/SENHA) -->
     <dialog id="auth-dialog" class="modern-modal modal-auth">
       <div class="modal-card">
         <header class="auth-modal-header">
           <div class="auth-brand-center">
             <div class="brand-badge-auth">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
               </svg>
             </div>
@@ -350,6 +376,21 @@
         </header>
 
         <div class="auth-modal-body">
+          <!-- BOTÃO GOOGLE AUTH -->
+          <button type="button" class="btn-google-auth" id="google-auth-btn">
+            <svg width="19" height="19" viewBox="0 0 24 24">
+              <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"/>
+              <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
+              <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3 0-.8.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15.1s.7 5.4 1.9 7.8l3.7-2.9z"/>
+              <path fill="#34A853" d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.9C3.7 20.6 7.5 23.5 12 23.5z"/>
+            </svg>
+            <span>Continuar com o Google</span>
+          </button>
+
+          <div class="auth-divider">
+            <span>ou use seu e-mail</span>
+          </div>
+
           <div class="auth-tabs" role="tablist">
             <button type="button" class="auth-tab active" data-auth-mode="login">Entrar</button>
             <button type="button" class="auth-tab" data-auth-mode="register">Criar conta</button>
@@ -544,4 +585,5 @@
     <script type="module" src="/app.js"></script>
   </body>
 </html>
+
 
