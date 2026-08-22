@@ -1,0 +1,1245 @@
+/* ==========================================================================
+   FINFLOW - FIREBASE CONTROLLER & STATE MANAGEMENT (SDK v12 MODULAR)
+   ========================================================================== */
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateProfile,
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  addDoc,
+  getDocs,
+  deleteDoc,
+  updateDoc,
+  query,
+  orderBy,
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+
+/* Firebase Configuration */
+const firebaseConfig = {
+  apiKey: "AIzaSyDLltRuNFF5U_nJl8UECvDX3CnyROvMlyc",
+  authDomain: "mapeamento-esportivo.firebaseapp.com",
+  projectId: "mapeamento-esportivo",
+  storageBucket: "mapeamento-esportivo.firebasestorage.app",
+  messagingSenderId: "256881997860",
+  appId: "1:256881997860:web:d1b1f9a434da7518ecc0b1",
+  measurementId: "G-BZXT7SBFSK",
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+/* Labels & Visual Themes */
+const labels = {
+  overview: "Visão Geral",
+  needs: "50% Necessidades",
+  wants: "30% Desejos",
+  savings: "20% Investimentos",
+  vr: "Carteira VR",
+  entries: "Todos os Lançamentos",
+};
+
+const viewSubtitles = {
+  overview: "Acompanhe seu fluxo de caixa mensal e distribuição do orçamento.",
+  needs: "Gastos essenciais como moradia, alimentação básica, contas e saúde (limite de 50%).",
+  wants: "Gastos com estilo de vida, lazer, hobbies, restaurantes e compras (limite de 30%).",
+  savings: "Aportes para reserva de emergência, metas de médio prazo e investimentos (mínimo de 20%).",
+  vr: "Controle específico de saldo, recebimentos e gastos do seu Vale-Refeição/Alimentação.",
+  entries: "Histórico detalhado e extrato de todas as transações cadastradas.",
+};
+
+const colors = {
+  needs: "#10b981",
+  wants: "#f59e0b",
+  savings: "#3b82f6",
+  vr: "#ec4899",
+};
+
+/* Application State */
+const state = {
+  user: null,
+  settings: { monthly_income_cents: 0, vr_initial_balance_cents: 0 },
+  rawEntries: [],
+  filteredEntries: [],
+  summary: null,
+  currentView: "overview",
+  filters: defaultFilters(),
+  activePreset: "current-month",
+};
+
+/* DOM Elements */
+const els = {
+  // Auth Widgets & Dialog
+  authUnloggedWidget: document.querySelector("#auth-unlogged-widget"),
+  authLoggedWidget: document.querySelector("#auth-logged-widget"),
+  openAuthBtn: document.querySelector("#open-auth-btn"),
+  mobileAuthBtn: document.querySelector("#mobile-auth-btn"),
+  mobileAuthLabel: document.querySelector("#mobile-auth-label"),
+  authDialog: document.querySelector("#auth-dialog"),
+  closeAuth: document.querySelector("#close-auth"),
+  authForm: document.querySelector("#auth-form"),
+  authModalTitle: document.querySelector("#auth-modal-title"),
+  authModalSubtitle: document.querySelector("#auth-modal-subtitle"),
+  authSubmitBtn: document.querySelector("#auth-submit-btn"),
+  authMessage: document.querySelector("#auth-message"),
+  nameField: document.querySelector("#name-field"),
+  logoutButton: document.querySelector("#logout-button"),
+  userDisplayName: document.querySelector("#user-display-name"),
+  userEmail: document.querySelector("#user-email"),
+  userAvatarInitials: document.querySelector("#user-avatar-initials"),
+
+  // Settings
+  toggleSettingsBtn: document.querySelector("#toggle-settings-btn"),
+  settingsForm: document.querySelector("#settings-form"),
+  settingsMessage: document.querySelector("#settings-message"),
+  toggleSettingsText: document.querySelector("#toggle-settings-text"),
+  toggleSettingsIcon: document.querySelector("#toggle-settings-icon"),
+
+  // Filters
+  filtersForm: document.querySelector("#filters-form"),
+  presetButtons: document.querySelectorAll("[data-preset]"),
+
+  // Entry Dialog (Redesigned)
+  entryDialog: document.querySelector("#entry-dialog"),
+  entryForm: document.querySelector("#entry-form"),
+  entryDialogTitle: document.querySelector("#entry-dialog-title"),
+  entryMessage: document.querySelector("#entry-message"),
+  deleteEntry: document.querySelector("#delete-entry"),
+  entryValueInput: document.querySelector("#entry-value"),
+  hiddenBudgetType: document.querySelector("#hidden-budget-type"),
+  hiddenEntryKind: document.querySelector("#hidden-entry-kind"),
+  budgetChips: document.querySelectorAll(".budget-chip"),
+  vrKindWrapper: document.querySelector("#vr-kind-toggle-wrapper"),
+  vrSegmentBtns: document.querySelectorAll(".segmented-movement .segment-btn"),
+  categoryInput: document.querySelector("#entry-category"),
+  catPills: document.querySelectorAll(".cat-pill"),
+
+  // Confirm Dialog
+  confirmDialog: document.querySelector("#confirm-dialog"),
+  confirmTitle: document.querySelector("#confirm-title"),
+  confirmDesc: document.querySelector("#confirm-desc"),
+  confirmOk: document.querySelector("#confirm-ok"),
+  confirmCancel: document.querySelector("#confirm-cancel"),
+
+  // Toast
+  toast: document.querySelector("#toast"),
+  toastText: document.querySelector("#toast-text"),
+};
+
+let authMode = "login";
+let searchDebounceTimer = null;
+let toastTimeout = null;
+let toastFadeTimeout = null;
+let confirmResolve = null;
+
+/* ==========================================================================
+   INITIALIZATION
+   ========================================================================== */
+
+document.addEventListener("DOMContentLoaded", () => {
+  wireEvents();
+  hydrateFilterFields();
+  setupCurrencyMasks();
+
+  // Listen to Firebase Auth state in real time
+  onAuthStateChanged(auth, async (user) => {
+    state.user = user;
+    if (user) {
+      updateUserUI(user);
+      await loadUserData();
+    } else {
+      updateGuestUI();
+      state.settings = { monthly_income_cents: 0, vr_initial_balance_cents: 0 };
+      state.rawEntries = [];
+      recalculateAndRender();
+    }
+  });
+});
+
+/* ==========================================================================
+   EVENT WIRING
+   ========================================================================== */
+
+function wireEvents() {
+  // Open / Close Auth Dialog
+  if (els.openAuthBtn) els.openAuthBtn.addEventListener("click", () => openAuthDialog());
+  if (els.mobileAuthBtn) els.mobileAuthBtn.addEventListener("click", () => {
+    if (state.user) {
+      showToast(`Conectado como ${state.user.email}`);
+    } else {
+      openAuthDialog();
+    }
+  });
+  if (els.closeAuth) els.closeAuth.addEventListener("click", () => els.authDialog.close());
+
+  // Auth Mode Tabs
+  document.querySelectorAll("[data-auth-mode]").forEach((btn) => {
+    btn.addEventListener("click", () => setAuthMode(btn.dataset.authMode));
+  });
+
+  els.authForm.addEventListener("submit", handleAuthSubmit);
+  if (els.logoutButton) els.logoutButton.addEventListener("click", handleLogout);
+
+  // Settings
+  els.toggleSettingsBtn.addEventListener("click", toggleSettings);
+  els.settingsForm.addEventListener("submit", handleSettingsSubmit);
+
+  // Filters
+  els.presetButtons.forEach((btn) => {
+    btn.addEventListener("click", () => applyPreset(btn.dataset.preset));
+  });
+  els.filtersForm.start.addEventListener("change", handleCustomDateChange);
+  els.filtersForm.end.addEventListener("change", handleCustomDateChange);
+  els.filtersForm.search.addEventListener("input", handleSearchInput);
+  els.filtersForm.addEventListener("submit", (e) => e.preventDefault());
+
+  // Views Navigation (Desktop & Mobile)
+  document.querySelectorAll("[data-view]").forEach((btn) => {
+    btn.addEventListener("click", () => setView(btn.dataset.view));
+  });
+
+  // Entry Modal Triggers
+  document.querySelector("#open-entry").addEventListener("click", () => {
+    if (!state.user) {
+      openAuthDialog();
+      showToast("Faça login para salvar seus lançamentos.");
+      return;
+    }
+    openEntryDialog();
+  });
+  document.querySelector("#close-entry").addEventListener("click", () => els.entryDialog.close());
+  document.querySelector("#cancel-entry").addEventListener("click", () => els.entryDialog.close());
+  els.entryForm.addEventListener("submit", handleEntrySubmit);
+  els.deleteEntry.addEventListener("click", handleEntryDelete);
+
+  // Budget Chips Selection
+  els.budgetChips.forEach((chip) => {
+    chip.addEventListener("click", () => setEntryBudget(chip.dataset.budget));
+  });
+
+  // VR Movement Kind Toggle
+  els.vrSegmentBtns.forEach((btn) => {
+    btn.addEventListener("click", () => setEntryKind(btn.dataset.kind));
+  });
+
+  // Quick Category Pills
+  els.catPills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      els.categoryInput.value = pill.dataset.cat;
+      els.catPills.forEach((p) => p.classList.toggle("active", p === pill));
+    });
+  });
+
+  // Confirm Modal
+  els.confirmOk.addEventListener("click", () => {
+    els.confirmDialog.close();
+    if (confirmResolve) confirmResolve(true);
+  });
+  els.confirmCancel.addEventListener("click", () => {
+    els.confirmDialog.close();
+    if (confirmResolve) confirmResolve(false);
+  });
+
+  // Resize listener for charts
+  window.addEventListener("resize", () => {
+    if (state.summary && state.currentView === "overview") {
+      renderCharts();
+    }
+  });
+}
+
+/* ==========================================================================
+   AUTHENTICATION LOGIC (FIREBASE AUTH)
+   ========================================================================== */
+
+function openAuthDialog(mode = "login") {
+  setAuthMode(mode);
+  els.authDialog.showModal();
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  document.querySelectorAll("[data-auth-mode]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.authMode === mode);
+  });
+
+  if (mode === "register") {
+    els.authModalTitle.textContent = "Criar nova conta";
+    els.authModalSubtitle.textContent = "Comece seu controle financeiro no Firebase em segundos.";
+    els.nameField.hidden = false;
+    els.authSubmitBtn.querySelector("span").textContent = "Criar minha conta";
+    els.authForm.password.autocomplete = "new-password";
+  } else {
+    els.authModalTitle.textContent = "Acesse sua conta";
+    els.authModalSubtitle.textContent = "Sincronize seus dados financeiros com segurança.";
+    els.nameField.hidden = true;
+    els.authSubmitBtn.querySelector("span").textContent = "Entrar no FinFlow";
+    els.authForm.password.autocomplete = "current-password";
+  }
+
+  hideAlert(els.authMessage);
+}
+
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+  hideAlert(els.authMessage);
+
+  const btn = els.authSubmitBtn;
+  const btnSpan = btn.querySelector("span");
+  const origText = btnSpan.textContent;
+  btnSpan.textContent = "Processando...";
+  btn.disabled = true;
+
+  const data = Object.fromEntries(new FormData(els.authForm));
+  const email = data.email.trim();
+  const password = data.password;
+  const name = data.name ? data.name.trim() : "";
+
+  try {
+    if (authMode === "register") {
+      const userCred = await createUserWithEmailAndPassword(auth, email, password);
+      if (name && userCred.user) {
+        await updateProfile(userCred.user, { displayName: name });
+      }
+      showToast(`Conta criada com sucesso! Bem-vindo(a), ${name || email}!`);
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+      showToast("Login realizado com sucesso!");
+    }
+    els.authDialog.close();
+    els.authForm.reset();
+  } catch (error) {
+    let msg = "Erro ao autenticar. Verifique seus dados.";
+    if (error.code === "auth/email-already-in-use") msg = "Este e-mail já está cadastrado. Tente entrar.";
+    else if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") msg = "E-mail ou senha incorretos.";
+    else if (error.code === "auth/weak-password") msg = "A senha deve ter pelo menos 6 caracteres.";
+    else if (error.code === "auth/invalid-email") msg = "Formato de e-mail inválido.";
+    
+    showAlert(els.authMessage, msg);
+  } finally {
+    btnSpan.textContent = origText;
+    btn.disabled = false;
+  }
+}
+
+async function handleLogout() {
+  try {
+    await signOut(auth);
+    showToast("Sessão finalizada com sucesso.");
+  } catch (error) {
+    showToast("Erro ao deslogar.");
+  }
+}
+
+function updateUserUI(user) {
+  els.authUnloggedWidget.hidden = true;
+  els.authLoggedWidget.hidden = false;
+
+  const displayName = user.displayName || user.email.split("@")[0];
+  els.userDisplayName.textContent = displayName;
+  els.userEmail.textContent = user.email;
+  els.userAvatarInitials.textContent = displayName.charAt(0).toUpperCase();
+
+  if (els.mobileAuthLabel) els.mobileAuthLabel.textContent = displayName.split(" ")[0];
+}
+
+function updateGuestUI() {
+  els.authUnloggedWidget.hidden = false;
+  els.authLoggedWidget.hidden = true;
+  if (els.mobileAuthLabel) els.mobileAuthLabel.textContent = "Entrar";
+}
+
+/* ==========================================================================
+   FIRESTORE DATA MANAGEMENT
+   ========================================================================== */
+
+async function loadUserData() {
+  if (!state.user) return;
+  const uid = state.user.uid;
+
+  try {
+    // 1. Load user settings
+    const settingsDocRef = doc(db, "users", uid, "settings", "config");
+    const settingsSnap = await getDoc(settingsDocRef);
+    if (settingsSnap.exists()) {
+      state.settings = settingsSnap.data();
+    } else {
+      state.settings = { monthly_income_cents: 0, vr_initial_balance_cents: 0 };
+    }
+
+    // 2. Load user entries
+    const entriesCol = collection(db, "users", uid, "entries");
+    const entriesQuery = query(entriesCol, orderBy("date", "desc"));
+    const querySnapshot = await getDocs(entriesQuery);
+
+    state.rawEntries = [];
+    querySnapshot.forEach((d) => {
+      state.rawEntries.push({ id: d.id, ...d.data() });
+    });
+
+    recalculateAndRender();
+  } catch (error) {
+    console.error("Erro ao carregar dados do Firestore:", error);
+    showToast("Erro ao sincronizar com o banco de dados.");
+  }
+}
+
+async function handleSettingsSubmit(event) {
+  event.preventDefault();
+  if (!state.user) {
+    openAuthDialog();
+    showToast("Faça login para salvar suas configurações.");
+    return;
+  }
+
+  els.settingsMessage.textContent = "";
+  try {
+    const body = {
+      monthly_income_cents: parseMoney(els.settingsForm.monthly_income.value),
+      vr_initial_balance_cents: parseMoney(els.settingsForm.vr_initial.value),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const settingsDocRef = doc(db, "users", state.user.uid, "settings", "config");
+    await setDoc(settingsDocRef, body, { merge: true });
+
+    state.settings = body;
+    showToast("Renda e VR atualizados com sucesso!");
+    els.settingsMessage.textContent = "Alterações salvas!";
+    setTimeout(() => {
+      els.settingsMessage.textContent = "";
+    }, 3000);
+
+    recalculateAndRender();
+  } catch (error) {
+    els.settingsMessage.textContent = error.message;
+    els.settingsMessage.style.color = "var(--danger)";
+  }
+}
+
+function toggleSettings() {
+  const isHidden = els.settingsForm.hidden;
+  els.settingsForm.hidden = !isHidden;
+  els.toggleSettingsText.textContent = isHidden ? "Ocultar bases" : "Editar bases";
+  els.toggleSettingsIcon.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
+}
+
+/* ==========================================================================
+   ENTRY MODAL (ADD / EDIT) - CHIPS & VALIDATION
+   ========================================================================== */
+
+function openEntryDialog(entry = null) {
+  els.entryForm.reset();
+  hideAlert(els.entryMessage);
+  els.catPills.forEach((p) => p.classList.remove("active"));
+
+  els.entryDialogTitle.textContent = entry ? "Editar Lançamento" : "Novo Lançamento";
+  els.deleteEntry.hidden = !entry;
+
+  els.entryForm.id.value = entry?.id || "";
+  
+  const initialBudget = entry?.budget_type || (state.currentView in labels && !["overview", "entries"].includes(state.currentView) ? state.currentView : "needs");
+  setEntryBudget(initialBudget);
+
+  const initialKind = entry?.entry_kind || "expense";
+  setEntryKind(initialKind);
+
+  els.entryValueInput.value = entry ? formatInputMoney(entry.value_cents) : "";
+  els.entryForm.description.value = entry?.description || "";
+  els.entryForm.category.value = entry?.category || "";
+  els.entryForm.date.value = entry?.date || toDateInput(new Date());
+  els.entryForm.payment_method.value = entry?.payment_method || (initialBudget === "vr" ? "VR" : "Cartão de Crédito");
+  els.entryForm.note.value = entry?.note || "";
+
+  els.entryDialog.showModal();
+}
+
+function setEntryBudget(budget) {
+  els.hiddenBudgetType.value = budget;
+  els.budgetChips.forEach((chip) => {
+    chip.classList.toggle("active", chip.dataset.budget === budget);
+  });
+
+  const isVr = budget === "vr";
+  els.vrKindWrapper.hidden = !isVr;
+  if (!isVr) {
+    setEntryKind("expense");
+  }
+}
+
+function setEntryKind(kind) {
+  els.hiddenEntryKind.value = kind;
+  els.vrSegmentBtns.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.kind === kind);
+  });
+}
+
+async function handleEntrySubmit(event) {
+  event.preventDefault();
+  if (!state.user) {
+    els.entryDialog.close();
+    openAuthDialog();
+    showToast("Faça login para salvar seus lançamentos.");
+    return;
+  }
+
+  hideAlert(els.entryMessage);
+  const data = Object.fromEntries(new FormData(els.entryForm));
+
+  try {
+    const value_cents = parseMoney(data.value);
+    if (!value_cents) throw new Error("Informe um valor maior que zero.");
+
+    const payload = {
+      budget_type: els.hiddenBudgetType.value,
+      entry_kind: els.hiddenEntryKind.value,
+      description: data.description.trim(),
+      category: data.category.trim(),
+      value_cents,
+      date: data.date,
+      payment_method: data.payment_method.trim(),
+      note: data.note ? data.note.trim() : "",
+      updatedAt: new Date().toISOString(),
+    };
+
+    const isEdit = Boolean(data.id);
+    const uid = state.user.uid;
+
+    if (isEdit) {
+      const entryRef = doc(db, "users", uid, "entries", data.id);
+      await updateDoc(entryRef, payload);
+      showToast("Lançamento atualizado com sucesso!");
+    } else {
+      payload.createdAt = new Date().toISOString();
+      await addDoc(collection(db, "users", uid, "entries"), payload);
+      showToast("Novo lançamento adicionado!");
+    }
+
+    els.entryDialog.close();
+    await loadUserData();
+  } catch (error) {
+    showAlert(els.entryMessage, error.message);
+  }
+}
+
+async function handleEntryDelete() {
+  const id = els.entryForm.id.value;
+  if (!id || !state.user) return;
+
+  const confirmed = await showConfirm(
+    "Excluir este lançamento?",
+    "Esta ação removerá a movimentação permanentemente do banco de dados."
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await deleteDoc(doc(db, "users", state.user.uid, "entries", id));
+    els.entryDialog.close();
+    showToast("Lançamento excluído com sucesso.");
+    await loadUserData();
+  } catch (error) {
+    showAlert(els.entryMessage, error.message);
+  }
+}
+
+function showConfirm(title, desc) {
+  els.confirmTitle.textContent = title;
+  els.confirmDesc.textContent = desc;
+  els.confirmDialog.showModal();
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+  });
+}
+
+/* ==========================================================================
+   DATE PRESETS, FILTERS & CALCULATIONS
+   ========================================================================== */
+
+function defaultFilters() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { start: toDateInput(start), end: toDateInput(end), search: "" };
+}
+
+function toDateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function hydrateFilterFields() {
+  els.filtersForm.start.value = state.filters.start;
+  els.filtersForm.end.value = state.filters.end;
+  els.filtersForm.search.value = state.filters.search;
+}
+
+function applyPreset(preset) {
+  state.activePreset = preset;
+  els.presetButtons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.preset === preset);
+  });
+
+  const now = new Date();
+  let start, end;
+
+  if (preset === "current-month") {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  } else if (preset === "prev-month") {
+    start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    end = new Date(now.getFullYear(), now.getMonth(), 0);
+  } else if (preset === "last-30") {
+    end = new Date();
+    start = new Date();
+    start.setDate(end.getDate() - 30);
+  } else if (preset === "current-year") {
+    start = new Date(now.getFullYear(), 0, 1);
+    end = new Date(now.getFullYear(), 11, 31);
+  }
+
+  if (start && end) {
+    state.filters.start = toDateInput(start);
+    state.filters.end = toDateInput(end);
+    hydrateFilterFields();
+    recalculateAndRender();
+  }
+}
+
+function handleCustomDateChange() {
+  state.activePreset = null;
+  els.presetButtons.forEach((btn) => btn.classList.remove("active"));
+  state.filters.start = els.filtersForm.start.value;
+  state.filters.end = els.filtersForm.end.value;
+  recalculateAndRender();
+}
+
+function handleSearchInput(e) {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    state.filters.search = e.target.value.trim().toLowerCase();
+    recalculateAndRender();
+  }, 200);
+}
+
+/* ==========================================================================
+   50/30/20 & VR FINANCIAL CALCULATION ENGINE
+   ========================================================================== */
+
+function recalculateAndRender() {
+  const { start, end, search } = state.filters;
+
+  // Filter entries based on date range and search term
+  state.filteredEntries = state.rawEntries.filter((entry) => {
+    if (start && entry.date < start) return false;
+    if (end && entry.date > end) return false;
+    if (search) {
+      const matchDesc = (entry.description || "").toLowerCase().includes(search);
+      const matchCat = (entry.category || "").toLowerCase().includes(search);
+      const matchMethod = (entry.payment_method || "").toLowerCase().includes(search);
+      if (!matchDesc && !matchCat && !matchMethod) return false;
+    }
+    return true;
+  });
+
+  // Calculate 50/30/20 & VR
+  const incomeCents = state.settings.monthly_income_cents || 0;
+  const vrInitialCents = state.settings.vr_initial_balance_cents || 0;
+
+  const plannedNeeds = Math.round(incomeCents * 0.5);
+  const plannedWants = Math.round(incomeCents * 0.3);
+  const plannedSavings = Math.round(incomeCents * 0.2);
+
+  let spentNeeds = 0;
+  let spentWants = 0;
+  let spentSavings = 0;
+  let vrPeriodSpent = 0;
+  let vrPeriodReceived = 0;
+
+  // Aggregate period entries
+  state.filteredEntries.forEach((entry) => {
+    if (entry.budget_type === "needs" && entry.entry_kind === "expense") spentNeeds += entry.value_cents;
+    else if (entry.budget_type === "wants" && entry.entry_kind === "expense") spentWants += entry.value_cents;
+    else if (entry.budget_type === "savings" && entry.entry_kind === "expense") spentSavings += entry.value_cents;
+    else if (entry.budget_type === "vr") {
+      if (entry.entry_kind === "expense") vrPeriodSpent += entry.value_cents;
+      else if (entry.entry_kind === "income") vrPeriodReceived += entry.value_cents;
+    }
+  });
+
+  // Aggregate all-time VR balance
+  let vrAllSpent = 0;
+  let vrAllReceived = 0;
+  state.rawEntries.forEach((entry) => {
+    if (entry.budget_type === "vr") {
+      if (entry.entry_kind === "expense") vrAllSpent += entry.value_cents;
+      else if (entry.entry_kind === "income") vrAllReceived += entry.value_cents;
+    }
+  });
+  const vrBalanceCents = vrInitialCents + vrAllReceived - vrAllSpent;
+
+  const totalSpentCents = spentNeeds + spentWants + spentSavings;
+  const availableCents = incomeCents - totalSpentCents;
+
+  state.summary = {
+    settings: state.settings,
+    totals: {
+      spent_cents: totalSpentCents,
+      available_cents: availableCents,
+    },
+    budgets: {
+      needs: {
+        planned_cents: plannedNeeds,
+        spent_cents: spentNeeds,
+        remaining_cents: plannedNeeds - spentNeeds,
+        usage_percent: plannedNeeds > 0 ? (spentNeeds / plannedNeeds) * 100 : 0,
+      },
+      wants: {
+        planned_cents: plannedWants,
+        spent_cents: spentWants,
+        remaining_cents: plannedWants - spentWants,
+        usage_percent: plannedWants > 0 ? (spentWants / plannedWants) * 100 : 0,
+      },
+      savings: {
+        planned_cents: plannedSavings,
+        spent_cents: spentSavings,
+        remaining_cents: plannedSavings - spentSavings,
+        usage_percent: plannedSavings > 0 ? (spentSavings / plannedSavings) * 100 : 0,
+      },
+    },
+    vr: {
+      initial_cents: vrInitialCents,
+      received_cents: vrPeriodReceived,
+      spent_cents: vrPeriodSpent,
+      period_spent_cents: vrPeriodSpent,
+      balance_cents: vrBalanceCents,
+    },
+  };
+
+  render();
+}
+
+/* ==========================================================================
+   RENDERERS & VIEWS
+   ========================================================================== */
+
+function setView(view) {
+  state.currentView = view;
+
+  // Update navigation items (Desktop & Mobile)
+  document.querySelectorAll("[data-view]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.view === view);
+  });
+
+  // Switch active panel
+  document.querySelectorAll(".view-panel").forEach((panel) => panel.classList.remove("active"));
+  const targetId = view === "overview" ? "overview-view" : view === "entries" ? "entries-view" : "category-view";
+  const targetPanel = document.querySelector(`#${targetId}`);
+  if (targetPanel) targetPanel.classList.add("active");
+
+  // Update Header Titles
+  text("#view-title", labels[view] || "Visão Geral");
+  text("#view-subtitle", viewSubtitles[view] || "");
+
+  render();
+}
+
+function render() {
+  if (!state.summary) return;
+
+  // Sync settings inputs
+  els.settingsForm.monthly_income.value = formatInputMoney(state.settings.monthly_income_cents);
+  els.settingsForm.vr_initial.value = formatInputMoney(state.settings.vr_initial_balance_cents);
+
+  renderMetrics();
+  renderBudgetBars();
+  renderCharts();
+  renderEntries();
+
+  if (!["overview", "entries"].includes(state.currentView)) {
+    renderCategory(state.currentView);
+  }
+}
+
+function renderMetrics() {
+  const summary = state.summary;
+  text("#metric-income", money(summary.settings.monthly_income_cents));
+  text("#metric-spent", money(summary.totals.spent_cents));
+  text("#metric-available", money(summary.totals.available_cents));
+  text("#metric-vr", money(summary.vr.balance_cents));
+
+  const spentPct = summary.settings.monthly_income_cents > 0
+    ? ((summary.totals.spent_cents / summary.settings.monthly_income_cents) * 100).toFixed(1)
+    : 0;
+  text("#metric-spent-pct", `${spentPct}% da renda comprometida`);
+}
+
+function renderBudgetBars() {
+  const container = document.querySelector("#budget-bars");
+  container.innerHTML = "";
+
+  const keys = [
+    { key: "needs", name: "50% Necessidades (Essencial)", fillClass: "fill-needs" },
+    { key: "wants", name: "30% Desejos (Estilo / Lazer)", fillClass: "fill-wants" },
+    { key: "savings", name: "20% Investimentos / Reserva", fillClass: "fill-savings" },
+  ];
+
+  keys.forEach(({ key, name, fillClass }) => {
+    const budget = state.summary.budgets[key];
+    const pct = Math.min(budget.usage_percent, 100);
+    const isOver = budget.spent_cents > budget.planned_cents;
+    const isNear = budget.usage_percent >= 85 && !isOver;
+    const statusClass = isOver ? "status-over" : isNear ? "status-near" : "";
+
+    container.insertAdjacentHTML(
+      "beforeend",
+      `<div class="budget-bar-item">
+        <div class="budget-bar-header">
+          <div class="budget-bar-name">
+            <span class="nav-dot dot-${key}"></span>
+            <span>${name}</span>
+          </div>
+          <div class="budget-bar-values">${money(budget.spent_cents)} de ${money(budget.planned_cents)}</div>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill ${fillClass} ${statusClass}" style="width: ${pct}%"></div>
+        </div>
+        <div class="budget-bar-footer">
+          <span>${budget.usage_percent.toFixed(1)}% utilizado</span>
+          <span>${isOver ? 'Excedido em ' + money(budget.spent_cents - budget.planned_cents) : 'Saldo restante: ' + money(budget.remaining_cents)}</span>
+        </div>
+      </div>`
+    );
+  });
+}
+
+function renderCharts() {
+  drawDistributionChart(document.querySelector("#distribution-chart"));
+  drawTimelineChart(document.querySelector("#timeline-chart"));
+}
+
+function drawDistributionChart(canvas) {
+  if (!canvas) return;
+  const ctx = setupCanvas(canvas);
+  const items = ["needs", "wants", "savings", "vr"].map((key) => ({
+    key,
+    label: labels[key],
+    value: key === "vr" ? state.summary.vr.period_spent_cents : state.summary.budgets[key]?.spent_cents || 0,
+  }));
+
+  const total = items.reduce((sum, item) => sum + item.value, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const cx = canvas.width * 0.32;
+  const cy = canvas.height * 0.5;
+  const outerRadius = Math.min(canvas.width, canvas.height) * 0.38;
+  const innerRadius = outerRadius * 0.58;
+
+  if (!total) {
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "600 14px 'Plus Jakarta Sans', system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText("Nenhum gasto registrado", canvas.width * 0.5, canvas.height * 0.5);
+    return;
+  }
+
+  let angle = -Math.PI / 2;
+  items.forEach((item) => {
+    if (!item.value) return;
+    const slice = (item.value / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerRadius, angle, angle + slice);
+    ctx.arc(cx, cy, innerRadius, angle + slice, angle, true);
+    ctx.closePath();
+    ctx.fillStyle = colors[item.key];
+    ctx.fill();
+    angle += slice;
+  });
+
+  // Center Total
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#64748b";
+  ctx.font = "700 10px 'Plus Jakarta Sans', system-ui";
+  ctx.fillText("TOTAL GASTO", cx, cy - 8);
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "800 13px 'Plus Jakarta Sans', system-ui";
+  ctx.fillText(money(total), cx, cy + 10);
+
+  // Legend List
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  items.forEach((item, index) => {
+    const y = 38 + index * 38;
+    const pct = total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
+
+    // Badge Dot
+    ctx.fillStyle = colors[item.key];
+    ctx.beginPath();
+    ctx.roundRect(canvas.width * 0.62, y - 10, 10, 10, 3);
+    ctx.fill();
+
+    // Text Label
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "700 12px 'Plus Jakarta Sans', system-ui";
+    ctx.fillText(`${item.label} (${pct}%)`, canvas.width * 0.62 + 16, y);
+
+    // Value
+    ctx.fillStyle = "#64748b";
+    ctx.font = "600 11px 'Plus Jakarta Sans', system-ui";
+    ctx.fillText(money(item.value), canvas.width * 0.62 + 16, y + 16);
+  });
+}
+
+function drawTimelineChart(canvas) {
+  if (!canvas) return;
+  const ctx = setupCanvas(canvas);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const expenses = state.filteredEntries
+    .filter((entry) => entry.entry_kind === "expense")
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (!expenses.length) {
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "600 14px 'Plus Jakarta Sans', system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText("Sem despesas no período selecionado", canvas.width * 0.5, canvas.height * 0.5);
+    return;
+  }
+
+  const totalsByDay = new Map();
+  expenses.forEach((entry) => totalsByDay.set(entry.date, (totalsByDay.get(entry.date) || 0) + entry.value_cents));
+  const points = [...totalsByDay.entries()].map(([date, value]) => ({ date, value }));
+
+  let running = 0;
+  points.forEach((point) => {
+    running += point.value;
+    point.total = running;
+  });
+
+  const max = Math.max(...points.map((point) => point.total), 1);
+  const padLeft = 40;
+  const padRight = 30;
+  const padTop = 30;
+  const padBottom = 30;
+  const chartWidth = canvas.width - padLeft - padRight;
+  const chartHeight = canvas.height - padTop - padBottom;
+
+  // Grid Lines
+  ctx.strokeStyle = "#f1f5f9";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 3; i++) {
+    const y = padTop + (chartHeight / 3) * i;
+    ctx.beginPath();
+    ctx.moveTo(padLeft, y);
+    ctx.lineTo(canvas.width - padRight, y);
+    ctx.stroke();
+  }
+
+  // Draw Area Gradient
+  const gradient = ctx.createLinearGradient(0, padTop, 0, canvas.height - padBottom);
+  gradient.addColorStop(0, "rgba(13, 148, 136, 0.25)");
+  gradient.addColorStop(1, "rgba(13, 148, 136, 0.0)");
+
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    const x = padLeft + (index / Math.max(points.length - 1, 1)) * chartWidth;
+    const y = canvas.height - padBottom - (point.total / max) * chartHeight;
+    if (index === 0) {
+      ctx.moveTo(x, canvas.height - padBottom);
+      ctx.lineTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  });
+  ctx.lineTo(canvas.width - padRight, canvas.height - padBottom);
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Draw Line
+  ctx.strokeStyle = "#0d9488";
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    const x = padLeft + (index / Math.max(points.length - 1, 1)) * chartWidth;
+    const y = canvas.height - padBottom - (point.total / max) * chartHeight;
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Draw Last Point Dot
+  const lastPoint = points[points.length - 1];
+  const lastX = canvas.width - padRight;
+  const lastY = canvas.height - padBottom - (lastPoint.total / max) * chartHeight;
+  ctx.fillStyle = "#0d9488";
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Header stats
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#64748b";
+  ctx.font = "600 12px 'Plus Jakarta Sans', system-ui";
+  ctx.fillText(`Acumulado final: `, padLeft, 18);
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "800 12px 'Plus Jakarta Sans', system-ui";
+  ctx.fillText(money(lastPoint.total), padLeft + 95, 18);
+}
+
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(Math.floor(rect.width), 300);
+  const height = Number(canvas.getAttribute("height")) || 220;
+
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = "100%";
+  canvas.style.height = `${height}px`;
+
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  return ctx;
+}
+
+function renderCategory(key) {
+  const summaryEl = document.querySelector("#category-summary");
+  const listEl = document.querySelector("#category-list");
+  const titleEl = document.querySelector("#category-list-title");
+
+  summaryEl.innerHTML = "";
+  listEl.innerHTML = "";
+  if (titleEl) titleEl.textContent = `Lançamentos de ${labels[key] || key}`;
+
+  if (key === "vr") {
+    const vr = state.summary.vr;
+    summaryEl.insertAdjacentHTML(
+      "beforeend",
+      `<div class="category-summary-title">Resumo da Carteira VR</div>
+      <div class="category-kpi-grid">
+        <div class="kpi-tile"><span>Saldo Inicial</span><strong>${money(vr.initial_cents)}</strong></div>
+        <div class="kpi-tile"><span>Total Recebido</span><strong style="color:var(--success)">+${money(vr.received_cents)}</strong></div>
+        <div class="kpi-tile"><span>Total Gasto</span><strong style="color:var(--danger)">-${money(vr.spent_cents)}</strong></div>
+        <div class="kpi-tile"><span>Saldo Atual</span><strong style="color:var(--primary-dark)">${money(vr.balance_cents)}</strong></div>
+      </div>`
+    );
+  } else {
+    const budget = state.summary.budgets[key] || { planned_cents: 0, spent_cents: 0, remaining_cents: 0, usage_percent: 0 };
+    summaryEl.insertAdjacentHTML(
+      "beforeend",
+      `<div class="category-summary-title">Resumo - ${labels[key]}</div>
+      <div class="category-kpi-grid">
+        <div class="kpi-tile"><span>Planejado (${key === 'needs' ? '50%' : key === 'wants' ? '30%' : '20%'})</span><strong>${money(budget.planned_cents)}</strong></div>
+        <div class="kpi-tile"><span>Realizado</span><strong>${money(budget.spent_cents)}</strong></div>
+        <div class="kpi-tile"><span>Saldo Restante</span><strong style="color:${budget.remaining_cents >= 0 ? 'var(--success)' : 'var(--danger)'}">${money(budget.remaining_cents)}</strong></div>
+        <div class="kpi-tile"><span>% Utilizado</span><strong>${budget.usage_percent.toFixed(1)}%</strong></div>
+      </div>`
+    );
+  }
+
+  const filtered = state.filteredEntries.filter((entry) => entry.budget_type === key);
+  renderEntryList(listEl, filtered);
+}
+
+function renderEntries() {
+  const listEl = document.querySelector("#entries-list");
+  renderEntryList(listEl, state.filteredEntries);
+
+  const total = state.filteredEntries
+    .filter((entry) => entry.entry_kind === "expense")
+    .reduce((sum, entry) => sum + entry.value_cents, 0);
+  text("#entries-total", money(total));
+}
+
+function renderEntryList(container, entries) {
+  container.innerHTML = "";
+  if (!entries || !entries.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="8" y1="12" x2="16" y2="12"></line>
+        </svg>
+        <p>Nenhuma movimentação encontrada para o período selecionado.</p>
+      </div>`;
+    return;
+  }
+
+  entries.forEach((entry) => {
+    const isIncome = entry.entry_kind === "income";
+    const sign = isIncome ? "+" : "-";
+    const amountClass = isIncome ? "amount-income" : "amount-expense";
+    const badgeMap = {
+      needs: { label: "50%", cls: "badge-needs" },
+      wants: { label: "30%", cls: "badge-wants" },
+      savings: { label: "20%", cls: "badge-savings" },
+      vr: { label: "VR", cls: "badge-vr" },
+    };
+    const badge = badgeMap[entry.budget_type] || { label: "R$", cls: "badge-needs" };
+    const noteText = entry.note ? `<span class="entry-tag-item">Obs: ${escapeHtml(entry.note)}</span>` : "";
+
+    container.insertAdjacentHTML(
+      "beforeend",
+      `<article class="entry-card">
+        <div class="entry-left">
+          <div class="entry-badge-icon ${badge.cls}">${badge.label}</div>
+          <div class="entry-info">
+            <div class="entry-title">${escapeHtml(entry.description)}</div>
+            <div class="entry-tags">
+              <span class="entry-tag-item">${formatDate(entry.date)}</span>
+              <span class="entry-tag-item">${escapeHtml(entry.category)}</span>
+              <span class="entry-tag-item">${escapeHtml(entry.payment_method)}</span>
+              ${noteText}
+            </div>
+          </div>
+        </div>
+        <div class="entry-right">
+          <div class="entry-amount ${amountClass}">${sign} ${money(entry.value_cents)}</div>
+          <button class="btn btn-secondary btn-sm" type="button" data-edit="${entry.id}">
+            Editar
+          </button>
+        </div>
+      </article>`
+    );
+  });
+
+  container.querySelectorAll("[data-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const entry = state.rawEntries.find((item) => item.id === btn.dataset.edit);
+      if (entry) openEntryDialog(entry);
+    });
+  });
+}
+
+/* ==========================================================================
+   REAL-TIME CURRENCY MASKING
+   ========================================================================== */
+
+function setupCurrencyMasks() {
+  const currencyInputs = [
+    els.settingsForm.monthly_income,
+    els.settingsForm.vr_initial,
+    els.entryValueInput,
+  ];
+
+  currencyInputs.forEach((input) => {
+    if (!input) return;
+    input.addEventListener("input", (e) => {
+      let value = e.target.value.replace(/\D/g, "");
+      if (!value) {
+        e.target.value = "";
+        return;
+      }
+      const cents = parseInt(value, 10);
+      e.target.value = formatInputMoney(cents);
+    });
+  });
+}
+
+/* ==========================================================================
+   UTILITY HELPERS & AUTO-DISMISSING TOAST
+   ========================================================================== */
+
+function parseMoney(value) {
+  const raw = String(value || "")
+    .replace(/\s/g, "")
+    .replace("R$", "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+
+  if (!raw || Number.isNaN(Number(raw))) {
+    throw new Error("Informe um valor numérico válido.");
+  }
+  const number = Number(raw);
+  if (number < 0) throw new Error("Valores negativos não são permitidos.");
+  return Math.round(number * 100);
+}
+
+function money(cents) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format((cents || 0) / 100);
+}
+
+function formatInputMoney(cents) {
+  return ((cents || 0) / 100).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  const parts = value.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR");
+}
+
+function text(selector, value) {
+  const el = document.querySelector(selector);
+  if (el) el.textContent = value;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function showToast(message, duration = 3000) {
+  els.toastText.textContent = message;
+  els.toast.hidden = false;
+  els.toast.classList.remove("toast-fade-out");
+
+  clearTimeout(toastTimeout);
+  clearTimeout(toastFadeTimeout);
+
+  toastFadeTimeout = setTimeout(() => {
+    els.toast.classList.add("toast-fade-out");
+  }, Math.max(duration - 350, 1000));
+
+  toastTimeout = setTimeout(() => {
+    els.toast.hidden = true;
+    els.toast.classList.remove("toast-fade-out");
+  }, duration);
+}
+
+function showAlert(el, msg) {
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(el.timeout);
+  el.timeout = setTimeout(() => {
+    hideAlert(el);
+  }, 4000);
+}
+
+function hideAlert(el) {
+  el.hidden = true;
+  el.textContent = "";
+}
+

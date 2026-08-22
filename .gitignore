@@ -1,0 +1,27 @@
+﻿# Environment and secrets
+.env
+.env.local
+*.log
+
+# Database and runtime files
+finance.db
+*.sqlite3
+
+# Python cache (if running legacy test server)
+__pycache__/
+*.pyc
+
+# Firebase cache
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+
+# Node / package manager
+node_modules/
+dist/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
