@@ -175,9 +175,9 @@
           </form>
         </section>
 
-        <!-- BARRA DE FILTROS INTELIGENTES -->
+        <!-- BARRA DE FILTROS INTELIGENTES (REDESENHADA) -->
         <section class="filter-controls-card">
-          <div class="preset-filters-scroll">
+          <div class="filter-presets-scroll">
             <div class="preset-filters" role="group" aria-label="Atalhos de Período">
               <button type="button" class="preset-pill active" data-preset="current-month">Este Mês</button>
               <button type="button" class="preset-pill" data-preset="prev-month">Mês Anterior</button>
@@ -187,21 +187,21 @@
           </div>
 
           <form id="filters-form" class="custom-filters-form">
-            <div class="filter-date-group">
-              <div class="date-field">
-                <label>De:</label>
-                <input name="start" type="date">
+            <div class="date-range-badge">
+              <div class="date-input-box">
+                <span class="date-badge-label">De</span>
+                <input name="start" type="date" aria-label="Data inicial">
               </div>
-              <div class="date-field">
-                <label>Até:</label>
-                <input name="end" type="date">
+              <span class="date-separator">→</span>
+              <div class="date-input-box">
+                <span class="date-badge-label">Até</span>
+                <input name="end" type="date" aria-label="Data final">
               </div>
             </div>
-            <div class="filter-search-group">
-              <div class="input-with-icon search-input-wrapper">
-                <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>
-                <input name="search" placeholder="Buscar por descrição..." autocomplete="off">
-              </div>
+
+            <div class="search-input-box">
+              <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>
+              <input name="search" placeholder="Buscar lançamentos..." autocomplete="off">
             </div>
           </form>
         </section>

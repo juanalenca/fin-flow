@@ -1026,14 +1026,14 @@ select {
 }
 
 /* ==========================================================================
-   FILTERS CONTROL BAR
+   FILTERS CONTROL BAR (REDESIGNED)
    ========================================================================== */
 
 .filter-controls-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 14px 18px;
+  padding: 12px 18px;
   margin-bottom: 24px;
   display: flex;
   flex-wrap: wrap;
@@ -1043,24 +1043,24 @@ select {
   box-shadow: var(--shadow-xs);
 }
 
-.preset-filters-scroll {
+.filter-presets-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
 
-.preset-filters-scroll::-webkit-scrollbar {
+.filter-presets-scroll::-webkit-scrollbar {
   display: none;
 }
 
 .preset-filters {
   display: flex;
+  align-items: center;
   gap: 6px;
-  padding-bottom: 2px;
 }
 
 .preset-pill {
-  padding: 7px 15px;
+  padding: 7px 14px;
   font-size: 0.82rem;
   font-weight: 700;
   border-radius: var(--radius-full);
@@ -1069,59 +1069,116 @@ select {
   border: 1px solid var(--border);
   transition: all var(--trans-fast);
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .preset-pill:hover {
   background: var(--surface-active);
   color: var(--text-main);
+  border-color: var(--text-subtle);
 }
 
 .preset-pill.active {
   background: #070604;
   color: var(--primary);
   border-color: #070604;
-  box-shadow: 0 2px 4px rgba(7, 6, 4, 0.2);
+  box-shadow: 0 2px 6px rgba(7, 6, 4, 0.25);
+  font-weight: 800;
 }
 
 .custom-filters-form {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
-.filter-date-group {
+/* UNIFIED DATE RANGE BADGE */
+.date-range-badge {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  background: var(--surface-hover);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: 4px 12px;
+  transition: border-color var(--trans-fast), box-shadow var(--trans-fast);
 }
 
-.date-field {
+.date-range-badge:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-subtle);
+  background: var(--surface);
+}
+
+.date-input-box {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.date-field label {
-  font-size: 0.78rem;
+.date-badge-label {
+  font-size: 0.74rem;
   font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--text-muted);
 }
 
-.date-field input {
-  padding: 7px 10px;
+.date-input-box input[type="date"] {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 4px 0 !important;
   font-size: 0.82rem;
-  width: 140px;
+  font-weight: 700;
+  color: var(--text-main);
+  width: 125px;
+  cursor: pointer;
+  outline: none;
 }
 
-.search-input-wrapper input {
-  padding: 7px 12px 7px 36px;
+.date-separator {
+  color: var(--text-subtle);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+/* SEARCH INPUT BOX */
+.search-input-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input-box .search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-subtle);
+  pointer-events: none;
+  transition: color var(--trans-fast);
+}
+
+.search-input-box input {
+  padding: 7px 14px 7px 36px;
   font-size: 0.84rem;
-  width: 210px;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--border);
+  background: var(--surface-hover);
+  width: 200px;
+  transition: all var(--trans-fast);
 }
 
-.search-input-wrapper .input-icon {
-  left: 10px;
+.search-input-box input:focus {
+  width: 230px;
+  background: var(--surface);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-subtle);
+}
+
+.search-input-box input:focus ~ .search-icon {
+  color: var(--primary-dark);
 }
 
 /* ==========================================================================

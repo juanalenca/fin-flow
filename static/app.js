@@ -979,7 +979,9 @@ function renderCharts() {
 
 function drawDistributionChart(canvas) {
   if (!canvas) return;
-  const ctx = setupCanvas(canvas);
+  const { ctx, width, height } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
+
   const items = ["needs", "wants", "savings", "vr"].map((key) => ({
     key,
     label: labels[key],
@@ -987,21 +989,80 @@ function drawDistributionChart(canvas) {
   }));
 
   const total = items.reduce((sum, item) => sum + item.value, 0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const isMobile = width < 420;
 
-  const cx = canvas.width * 0.32;
-  const cy = canvas.height * 0.5;
-  const outerRadius = Math.min(canvas.width, canvas.height) * 0.38;
+  const cx = isMobile ? width * 0.5 : width * 0.32;
+  const cy = isMobile ? 80 : height * 0.5;
+  const outerRadius = isMobile ? 60 : Math.min(width, height) * 0.36;
   const innerRadius = outerRadius * 0.58;
 
   if (!total) {
-    ctx.fillStyle = "#8C877D";
-    ctx.font = "600 14px 'Plus Jakarta Sans', system-ui";
+    // Elegant Empty Doughnut Placeholder
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerRadius, 0, Math.PI * 2);
+    ctx.arc(cx, cy, innerRadius, Math.PI * 2, 0, true);
+    ctx.closePath();
+    ctx.fillStyle = "#EFEAE1";
+    ctx.fill();
+
+    // Subtle border
+    ctx.strokeStyle = "#E2DCCF";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Center text
     ctx.textAlign = "center";
-    ctx.fillText("Nenhum gasto registrado", canvas.width * 0.5, canvas.height * 0.5);
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#070604";
+    ctx.font = "800 13px 'Plus Jakarta Sans', system-ui";
+    ctx.fillText("R$ 0,00", cx, cy - 6);
+    ctx.fillStyle = "#8C877D";
+    ctx.font = "600 10px 'Plus Jakarta Sans', system-ui";
+    ctx.fillText("Sem gastos", cx, cy + 10);
+
+    // Empty Legend
+    if (isMobile) {
+      // 2 columns legend on mobile below chart
+      items.forEach((item, index) => {
+        const col = index % 2;
+        const row = Math.floor(index / 2);
+        const lx = col === 0 ? 20 : width * 0.52;
+        const ly = 160 + row * 26;
+
+        ctx.fillStyle = colors[item.key];
+        ctx.beginPath();
+        ctx.roundRect(lx, ly - 8, 8, 8, 2);
+        ctx.fill();
+
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#8C877D";
+        ctx.font = "600 11px 'Plus Jakarta Sans', system-ui";
+        ctx.fillText(`${item.label}: R$ 0,00`, lx + 14, ly - 4);
+      });
+    } else {
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      items.forEach((item, index) => {
+        const y = 38 + index * 38;
+        ctx.fillStyle = colors[item.key];
+        ctx.beginPath();
+        ctx.roundRect(width * 0.60, y - 10, 10, 10, 3);
+        ctx.fill();
+
+        ctx.fillStyle = "#070604";
+        ctx.font = "800 12px 'Plus Jakarta Sans', system-ui";
+        ctx.fillText(`${item.label} (0%)`, width * 0.60 + 16, y);
+
+        ctx.fillStyle = "#8C877D";
+        ctx.font = "600 11px 'Plus Jakarta Sans', system-ui";
+        ctx.fillText("R$ 0,00", width * 0.60 + 16, y + 16);
+      });
+    }
     return;
   }
 
+  // Draw Slices
   let angle = -Math.PI / 2;
   items.forEach((item) => {
     if (!item.value) return;
@@ -1026,44 +1087,93 @@ function drawDistributionChart(canvas) {
   ctx.fillText(money(total), cx, cy + 10);
 
   // Legend List
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  items.forEach((item, index) => {
-    const y = 38 + index * 38;
-    const pct = total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
+  if (isMobile) {
+    items.forEach((item, index) => {
+      const col = index % 2;
+      const row = Math.floor(index / 2);
+      const lx = col === 0 ? 20 : width * 0.52;
+      const ly = 160 + row * 28;
+      const pct = total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
 
-    // Badge Dot
-    ctx.fillStyle = colors[item.key];
-    ctx.beginPath();
-    ctx.roundRect(canvas.width * 0.62, y - 10, 10, 10, 3);
-    ctx.fill();
+      ctx.fillStyle = colors[item.key];
+      ctx.beginPath();
+      ctx.roundRect(lx, ly - 8, 8, 8, 2);
+      ctx.fill();
 
-    // Text Label
-    ctx.fillStyle = "#070604";
-    ctx.font = "800 12px 'Plus Jakarta Sans', system-ui";
-    ctx.fillText(`${item.label} (${pct}%)`, canvas.width * 0.62 + 16, y);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#070604";
+      ctx.font = "700 11px 'Plus Jakarta Sans', system-ui";
+      ctx.fillText(`${item.label} (${pct}%)`, lx + 14, ly - 8);
+      ctx.fillStyle = "#57534E";
+      ctx.font = "600 10px 'Plus Jakarta Sans', system-ui";
+      ctx.fillText(money(item.value), lx + 14, ly + 6);
+    });
+  } else {
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    items.forEach((item, index) => {
+      const y = 38 + index * 38;
+      const pct = total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
 
-    // Value
-    ctx.fillStyle = "#57534E";
-    ctx.font = "600 11px 'Plus Jakarta Sans', system-ui";
-    ctx.fillText(money(item.value), canvas.width * 0.62 + 16, y + 16);
-  });
+      ctx.fillStyle = colors[item.key];
+      ctx.beginPath();
+      ctx.roundRect(width * 0.60, y - 10, 10, 10, 3);
+      ctx.fill();
+
+      ctx.fillStyle = "#070604";
+      ctx.font = "800 12px 'Plus Jakarta Sans', system-ui";
+      ctx.fillText(`${item.label} (${pct}%)`, width * 0.60 + 16, y);
+
+      ctx.fillStyle = "#57534E";
+      ctx.font = "600 11px 'Plus Jakarta Sans', system-ui";
+      ctx.fillText(money(item.value), width * 0.60 + 16, y + 16);
+    });
+  }
 }
 
 function drawTimelineChart(canvas) {
   if (!canvas) return;
-  const ctx = setupCanvas(canvas);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const { ctx, width, height } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
+
+  const padLeft = 40;
+  const padRight = 30;
+  const padTop = 30;
+  const padBottom = 30;
+  const chartWidth = width - padLeft - padRight;
+  const chartHeight = height - padTop - padBottom;
+
+  // Grid Lines
+  ctx.strokeStyle = "#E5DFC9";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 3; i++) {
+    const y = padTop + (chartHeight / 3) * i;
+    ctx.beginPath();
+    ctx.moveTo(padLeft, y);
+    ctx.lineTo(width - padRight, y);
+    ctx.stroke();
+  }
 
   const expenses = state.filteredEntries
     .filter((entry) => entry.entry_kind === "expense")
     .sort((a, b) => a.date.localeCompare(b.date));
 
   if (!expenses.length) {
+    // Subtle baseline
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = "#D5CEBD";
+    ctx.beginPath();
+    ctx.moveTo(padLeft, height - padBottom);
+    ctx.lineTo(width - padRight, height - padBottom);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
     ctx.fillStyle = "#8C877D";
-    ctx.font = "600 14px 'Plus Jakarta Sans', system-ui";
+    ctx.font = "600 13px 'Plus Jakarta Sans', system-ui";
     ctx.textAlign = "center";
-    ctx.fillText("Sem despesas no período selecionado", canvas.width * 0.5, canvas.height * 0.5);
+    ctx.textBaseline = "middle";
+    ctx.fillText("Nenhuma movimentação no período selecionado", width * 0.5, height * 0.5);
     return;
   }
 
@@ -1078,41 +1188,24 @@ function drawTimelineChart(canvas) {
   });
 
   const max = Math.max(...points.map((point) => point.total), 1);
-  const padLeft = 40;
-  const padRight = 30;
-  const padTop = 30;
-  const padBottom = 30;
-  const chartWidth = canvas.width - padLeft - padRight;
-  const chartHeight = canvas.height - padTop - padBottom;
-
-  // Grid Lines
-  ctx.strokeStyle = "#E5DFC9";
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 3; i++) {
-    const y = padTop + (chartHeight / 3) * i;
-    ctx.beginPath();
-    ctx.moveTo(padLeft, y);
-    ctx.lineTo(canvas.width - padRight, y);
-    ctx.stroke();
-  }
 
   // Draw Area Gradient (Gold Amber)
-  const gradient = ctx.createLinearGradient(0, padTop, 0, canvas.height - padBottom);
+  const gradient = ctx.createLinearGradient(0, padTop, 0, height - padBottom);
   gradient.addColorStop(0, "rgba(253, 183, 45, 0.35)");
   gradient.addColorStop(1, "rgba(253, 183, 45, 0.0)");
 
   ctx.beginPath();
   points.forEach((point, index) => {
     const x = padLeft + (index / Math.max(points.length - 1, 1)) * chartWidth;
-    const y = canvas.height - padBottom - (point.total / max) * chartHeight;
+    const y = height - padBottom - (point.total / max) * chartHeight;
     if (index === 0) {
-      ctx.moveTo(x, canvas.height - padBottom);
+      ctx.moveTo(x, height - padBottom);
       ctx.lineTo(x, y);
     } else {
       ctx.lineTo(x, y);
     }
   });
-  ctx.lineTo(canvas.width - padRight, canvas.height - padBottom);
+  ctx.lineTo(width - padRight, height - padBottom);
   ctx.closePath();
   ctx.fillStyle = gradient;
   ctx.fill();
@@ -1124,7 +1217,7 @@ function drawTimelineChart(canvas) {
   ctx.beginPath();
   points.forEach((point, index) => {
     const x = padLeft + (index / Math.max(points.length - 1, 1)) * chartWidth;
-    const y = canvas.height - padBottom - (point.total / max) * chartHeight;
+    const y = height - padBottom - (point.total / max) * chartHeight;
     if (index === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
@@ -1132,8 +1225,8 @@ function drawTimelineChart(canvas) {
 
   // Draw Last Point Dot
   const lastPoint = points[points.length - 1];
-  const lastX = canvas.width - padRight;
-  const lastY = canvas.height - padBottom - (lastPoint.total / max) * chartHeight;
+  const lastX = width - padRight;
+  const lastY = height - padBottom - (lastPoint.total / max) * chartHeight;
   ctx.fillStyle = "#E5A324";
   ctx.beginPath();
   ctx.arc(lastX, lastY, 6, 0, Math.PI * 2);
@@ -1156,8 +1249,8 @@ function drawTimelineChart(canvas) {
 function setupCanvas(canvas) {
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
-  const width = Math.max(Math.floor(rect.width), 300);
-  const height = Number(canvas.getAttribute("height")) || 220;
+  const width = Math.max(Math.floor(rect.width), 280);
+  const height = Number(canvas.getAttribute("height")) || 230;
 
   canvas.width = width * dpr;
   canvas.height = height * dpr;
@@ -1166,7 +1259,7 @@ function setupCanvas(canvas) {
 
   const ctx = canvas.getContext("2d");
   ctx.scale(dpr, dpr);
-  return ctx;
+  return { ctx, width, height };
 }
 
 function renderCategory(key) {
