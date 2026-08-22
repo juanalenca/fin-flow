@@ -977,11 +977,38 @@ function renderCharts() {
   drawTimelineChart(document.querySelector("#timeline-chart"));
 }
 
+function setChartEmptyState(canvas, isEmpty, title, description) {
+  if (!canvas) return;
+  const wrapper = canvas.closest(".canvas-wrapper");
+  if (!wrapper) return;
+
+  wrapper.classList.toggle("is-empty", isEmpty);
+  let emptyState = wrapper.querySelector(".chart-empty-state");
+
+  if (isEmpty) {
+    if (!emptyState) {
+      emptyState = document.createElement("div");
+      emptyState.className = "chart-empty-state";
+      wrapper.appendChild(emptyState);
+    }
+    emptyState.innerHTML = `
+      <div class="chart-empty-icon" aria-hidden="true">
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 3v18h18"></path>
+          <path d="M7 15h3v3H7z"></path>
+          <path d="M12 11h3v7h-3z"></path>
+          <path d="M17 7h3v11h-3z"></path>
+        </svg>
+      </div>
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(description)}</span>`;
+  } else if (emptyState) {
+    emptyState.remove();
+  }
+}
+
 function drawDistributionChart(canvas) {
   if (!canvas) return;
-  const { ctx, width, height } = setupCanvas(canvas);
-  ctx.clearRect(0, 0, width, height);
-
   const items = ["needs", "wants", "savings", "vr"].map((key) => ({
     key,
     label: labels[key],
@@ -989,78 +1016,23 @@ function drawDistributionChart(canvas) {
   }));
 
   const total = items.reduce((sum, item) => sum + item.value, 0);
+  setChartEmptyState(
+    canvas,
+    !total,
+    "Sem gastos para distribuir",
+    "Registre uma despesa ou ajuste o período para visualizar a divisão por orçamento."
+  );
+  if (!total) return;
+
+  const { ctx, width, height } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
+
   const isMobile = width < 420;
 
   const cx = isMobile ? width * 0.5 : width * 0.32;
   const cy = isMobile ? 80 : height * 0.5;
   const outerRadius = isMobile ? 60 : Math.min(width, height) * 0.36;
   const innerRadius = outerRadius * 0.58;
-
-  if (!total) {
-    // Elegant Empty Doughnut Placeholder
-    ctx.beginPath();
-    ctx.arc(cx, cy, outerRadius, 0, Math.PI * 2);
-    ctx.arc(cx, cy, innerRadius, Math.PI * 2, 0, true);
-    ctx.closePath();
-    ctx.fillStyle = "#EFEAE1";
-    ctx.fill();
-
-    // Subtle border
-    ctx.strokeStyle = "#E2DCCF";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Center text
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "#070604";
-    ctx.font = "800 13px 'Plus Jakarta Sans', system-ui";
-    ctx.fillText("R$ 0,00", cx, cy - 6);
-    ctx.fillStyle = "#8C877D";
-    ctx.font = "600 10px 'Plus Jakarta Sans', system-ui";
-    ctx.fillText("Sem gastos", cx, cy + 10);
-
-    // Empty Legend
-    if (isMobile) {
-      // 2 columns legend on mobile below chart
-      items.forEach((item, index) => {
-        const col = index % 2;
-        const row = Math.floor(index / 2);
-        const lx = col === 0 ? 20 : width * 0.52;
-        const ly = 160 + row * 26;
-
-        ctx.fillStyle = colors[item.key];
-        ctx.beginPath();
-        ctx.roundRect(lx, ly - 8, 8, 8, 2);
-        ctx.fill();
-
-        ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = "#8C877D";
-        ctx.font = "600 11px 'Plus Jakarta Sans', system-ui";
-        ctx.fillText(`${item.label}: R$ 0,00`, lx + 14, ly - 4);
-      });
-    } else {
-      ctx.textAlign = "left";
-      ctx.textBaseline = "alphabetic";
-      items.forEach((item, index) => {
-        const y = 38 + index * 38;
-        ctx.fillStyle = colors[item.key];
-        ctx.beginPath();
-        ctx.roundRect(width * 0.60, y - 10, 10, 10, 3);
-        ctx.fill();
-
-        ctx.fillStyle = "#070604";
-        ctx.font = "800 12px 'Plus Jakarta Sans', system-ui";
-        ctx.fillText(`${item.label} (0%)`, width * 0.60 + 16, y);
-
-        ctx.fillStyle = "#8C877D";
-        ctx.font = "600 11px 'Plus Jakarta Sans', system-ui";
-        ctx.fillText("R$ 0,00", width * 0.60 + 16, y + 16);
-      });
-    }
-    return;
-  }
 
   // Draw Slices
   let angle = -Math.PI / 2;
@@ -1134,6 +1106,18 @@ function drawDistributionChart(canvas) {
 
 function drawTimelineChart(canvas) {
   if (!canvas) return;
+  const expenses = state.filteredEntries
+    .filter((entry) => entry.entry_kind === "expense")
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  setChartEmptyState(
+    canvas,
+    !expenses.length,
+    "Sem evolução no período",
+    "Quando houver lançamentos, a curva acumulada aparecerá aqui sem ocupar espaço vazio."
+  );
+  if (!expenses.length) return;
+
   const { ctx, width, height } = setupCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
 
@@ -1153,28 +1137,6 @@ function drawTimelineChart(canvas) {
     ctx.moveTo(padLeft, y);
     ctx.lineTo(width - padRight, y);
     ctx.stroke();
-  }
-
-  const expenses = state.filteredEntries
-    .filter((entry) => entry.entry_kind === "expense")
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  if (!expenses.length) {
-    // Subtle baseline
-    ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = "#D5CEBD";
-    ctx.beginPath();
-    ctx.moveTo(padLeft, height - padBottom);
-    ctx.lineTo(width - padRight, height - padBottom);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.fillStyle = "#8C877D";
-    ctx.font = "600 13px 'Plus Jakarta Sans', system-ui";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("Nenhuma movimentação no período selecionado", width * 0.5, height * 0.5);
-    return;
   }
 
   const totalsByDay = new Map();
@@ -1483,5 +1445,4 @@ function hideAlert(el) {
   el.hidden = true;
   el.textContent = "";
 }
-
 
