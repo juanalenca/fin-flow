@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-apk:
-    name: Compilar APK Android
+    name: Compilar APK Android (Release & Debug)
     runs-on: ubuntu-latest
 
     steps:
@@ -38,14 +38,55 @@ jobs:
       - name: Conceder permissão de execução ao Gradle Wrapper
         run: chmod +x android/gradlew
 
-      - name: Compilar APK de Depuração (Debug)
+      - name: Compilar APKs (Release e Debug)
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleRelease assembleDebug --no-daemon --stacktrace
 
-      - name: Disponibilizar APK para Download (Artifact)
+      - name: Criar Chave Criptográfica e Assinar APK de Release (V2/V3/V4)
+        run: |
+          # 1. Gerar Keystore RSA 2048-bit
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -alias finflow-release-key \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass finflow_secure_pass_2026 \
+            -keypass finflow_secure_pass_2026 \
+            -dname "CN=FinFlow, OU=Mobile Security, O=FinFlow Org, L=Sao Paulo, ST=SP, C=BR"
+
+          # 2. Localizar ferramentas de build do Android SDK (zipalign e apksigner)
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
+          echo "Utilizando Android Build-Tools em: $BUILD_TOOLS_DIR"
+
+          # 3. Alinhamento de bytes (zipalign)
+          $BUILD_TOOLS_DIR/zipalign -v -p 4 \
+            android/app/build/outputs/apk/release/app-release-unsigned.apk \
+            android/app/build/outputs/apk/release/app-release-aligned.apk
+
+          # 4. Assinatura com apksigner (Esquemas V2, V3 e V4)
+          $BUILD_TOOLS_DIR/apksigner sign \
+            --ks release.keystore \
+            --ks-pass pass:finflow_secure_pass_2026 \
+            --ks-key-alias finflow-release-key \
+            --key-pass pass:finflow_secure_pass_2026 \
+            --out android/app/build/outputs/apk/release/FinFlow-Release-Signed.apk \
+            android/app/build/outputs/apk/release/app-release-aligned.apk
+
+          # 5. Verificação da assinatura
+          $BUILD_TOOLS_DIR/apksigner verify --verbose android/app/build/outputs/apk/release/FinFlow-Release-Signed.apk
+
+      - name: Disponibilizar APK de Release Assinado (Recomendado para Instalação)
         uses: actions/upload-artifact@v4
         with:
-          name: FinFlow-Android-APK
+          name: FinFlow-Release-Signed-APK
+          path: android/app/build/outputs/apk/release/FinFlow-Release-Signed.apk
+          retention-days: 30
+
+      - name: Disponibilizar APK de Debug (Opcional para Testes com Logs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinFlow-Debug-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
