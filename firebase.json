@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "fin-flow",
+    "site": "fn-flow",
     "public": "static",
     "ignore": [
       "firebase.json",
