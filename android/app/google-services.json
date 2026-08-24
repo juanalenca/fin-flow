@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "256881997860",
+    "project_id": "mapeamento-esportivo",
+    "storage_bucket": "mapeamento-esportivo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:256881997860:android:d1b1f9a434da7518ecc0b1",
+        "android_client_info": {
+          "package_name": "com.finflow.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLltRuNFF5U_nJl8UECvDX3CnyROvMlyc"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

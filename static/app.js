@@ -8,6 +8,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInWithCredential,
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
@@ -324,18 +325,40 @@ function setAuthMode(mode) {
 async function handleGoogleAuth() {
   hideAlert(els.authMessage);
   try {
+    const isNative = typeof window.Capacitor !== "undefined" && window.Capacitor.isNativePlatform();
+    const nativeAuth = window.Capacitor?.Plugins?.FirebaseAuthentication;
+
+    if (isNative && nativeAuth) {
+      // Autenticação nativa oficial do Android / iOS (Janela de 1 toque sem popup web)
+      const res = await nativeAuth.signInWithGoogle();
+      if (res && res.credential && res.credential.idToken) {
+        const credential = GoogleAuthProvider.credential(res.credential.idToken);
+        const userCred = await signInWithCredential(auth, credential);
+        const user = userCred.user;
+        showToast(`Bem-vindo(a), ${user.displayName || user.email}!`);
+        els.authDialog.close();
+        return;
+      }
+    }
+
+    // Fluxo padrão para navegadores web
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
     showToast(`Bem-vindo(a), ${user.displayName || user.email}!`);
     els.authDialog.close();
   } catch (error) {
     console.error("Google Auth Error:", error);
-    if (error.code === "auth/popup-closed-by-user" || error.code === "auth/cancelled-popup-request") {
+    if (
+      error.code === "auth/popup-closed-by-user" || 
+      error.code === "auth/cancelled-popup-request" ||
+      error.message?.includes("CANCELED") ||
+      error.message?.includes("canceled")
+    ) {
       return;
     }
     let msg = "Erro ao autenticar com o Google.";
     if (error.code === "auth/unauthorized-domain") {
-      msg = "Domínio não autorizado pelo Firebase. Ao testar localmente, acesse por 'http://localhost:8080' ou acesse o app publicado no Firebase Hosting.";
+      msg = "Domínio não autorizado pelo Firebase. Acesse o app publicado no Firebase Hosting ou use E-mail e Senha.";
     } else if (error.code === "auth/operation-not-allowed") {
       msg = "O login com o Google precisa ser ativado no Firebase Console (Authentication > Sign-in method).";
     } else if (error.message) {
