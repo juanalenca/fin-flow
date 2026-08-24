@@ -1,4 +1,4 @@
-﻿# FinFlow · Gestão Financeira Pessoal (50/30/20 & VR)
+# FinFlow · Gestão Financeira Pessoal (50/30/20 & VR)
 
 **FinFlow** é uma aplicação web moderna e serverless para gestão financeira pessoal baseada na consagrada metodologia **50/30/20** com suporte a controle independente de **Carteira VR (Vale-Refeição/Alimentação)**.
 
@@ -72,6 +72,33 @@ firebase serve
 
 ---
 
+## 📱 Aplicativo Multiplataforma (Android & iOS com Capacitor)
+
+O FinFlow foi empacotado para execução nativa em dispositivos móveis através do **Capacitor**, permitindo sincronização em tempo real bidirecional entre o navegador e o celular (`onSnapshot` do Firestore) com suporte offline.
+
+### 🔄 Sincronizar alterações da Web com os Apps Nativos:
+```bash
+npm run sync
+```
+
+### 🤖 Abrir e Compilar para Android:
+1. Abra o projeto no **Android Studio**:
+   ```bash
+   npm run open:android
+   ```
+2. Para gerar o APK diretamente no Android Studio:
+   - Vá em **Build** > **Build Bundle(s) / APK(s)** > **Build APK(s)**.
+   - O APK gerado estará em `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+### 🍎 Abrir e Compilar para iOS:
+1. Abra o projeto no **Xcode** (em macOS):
+   ```bash
+   npm run open:ios
+   ```
+2. Selecione o dispositivo de destino ou simulador e clique em **Run** ou compile para publicação na App Store.
+
+---
+
 ## 🔒 Regras de Segurança do Firestore
 
 As regras de segurança (`firestore.rules`) garantem que apenas o próprio usuário autenticado possa ler e gravar suas configurações e lançamentos:
@@ -97,14 +124,19 @@ service cloud.firestore {
 
 ```
 fin-flow/
+├── android/               # Projeto nativo Android (Gradle, Android Studio, APK)
+├── ios/                   # Projeto nativo iOS (Xcode workspace)
+├── package.json           # Dependências e scripts do Capacitor
+├── capacitor.config.json  # Configurações do app nativo (App ID, Splash, StatusBar)
 ├── firebase.json          # Configuração do Firebase Hosting
 ├── firestore.rules        # Regras de segurança do Cloud Firestore
-├── .gitignore             # Arquivos ignorados no versionamento
 ├── README.md              # Documentação do projeto
-└── static/                # Arquivos da aplicação estática
-    ├── index.html         # Estrutura e marcação SPA
-    ├── styles.css         # Design System e estilos visuais
-    └── app.js             # Lógica reativa e integração com Firebase SDK v12
+└── static/                # Arquivos da aplicação frontend e PWA
+    ├── manifest.json      # Manifesto PWA com metadados do app
+    ├── icon.svg           # Ícone do aplicativo em alta resolução
+    ├── index.html         # Estrutura SPA com suporte a Safe Areas
+    ├── styles.css         # Design System e estilos móveis
+    └── app.js             # Lógica reativa com onSnapshot (tempo real)
 ```
 
 ---

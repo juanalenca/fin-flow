@@ -25,6 +25,7 @@ import {
   updateDoc,
   query,
   orderBy,
+  onSnapshot,
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 /* Firebase Configuration */
@@ -153,6 +154,19 @@ let searchDebounceTimer = null;
 let toastTimeout = null;
 let toastFadeTimeout = null;
 let confirmResolve = null;
+let unsubscribeSettings = null;
+let unsubscribeEntries = null;
+
+function unsubscribeUserData() {
+  if (typeof unsubscribeSettings === "function") {
+    unsubscribeSettings();
+    unsubscribeSettings = null;
+  }
+  if (typeof unsubscribeEntries === "function") {
+    unsubscribeEntries();
+    unsubscribeEntries = null;
+  }
+}
 
 /* ==========================================================================
    INITIALIZATION
@@ -173,6 +187,7 @@ document.addEventListener("DOMContentLoaded", () => {
       updateUserUI(user);
       await loadUserData();
     } else {
+      unsubscribeUserData();
       updateGuestUI();
       loadGuestData();
     }
@@ -452,48 +467,64 @@ async function loadUserData() {
   if (!state.user) return;
   const uid = state.user.uid;
 
-  try {
-    // 1. Load user settings from Firestore
-    const settingsDocRef = doc(db, "users", uid, "settings", "config");
-    const settingsSnap = await getDoc(settingsDocRef);
-    if (settingsSnap.exists()) {
-      state.settings = settingsSnap.data();
-    } else {
-      // If user had local guest settings, migrate them
-      if (state.settings.monthly_income_cents > 0 || state.settings.vr_initial_balance_cents > 0) {
-        await setDoc(settingsDocRef, { ...state.settings, updatedAt: new Date().toISOString() });
-      }
-    }
+  unsubscribeUserData();
 
-    // 2. Load user entries from Firestore
+  try {
+    // 1. Ouvinte em tempo real para configurações do usuário (Renda, Saldo VR)
+    const settingsDocRef = doc(db, "users", uid, "settings", "config");
+    unsubscribeSettings = onSnapshot(
+      settingsDocRef,
+      async (settingsSnap) => {
+        if (settingsSnap.exists()) {
+          state.settings = settingsSnap.data();
+        } else {
+          // Migração de configurações locais se existirem
+          if (state.settings.monthly_income_cents > 0 || state.settings.vr_initial_balance_cents > 0) {
+            await setDoc(settingsDocRef, { ...state.settings, updatedAt: new Date().toISOString() });
+          }
+        }
+        recalculateAndRender();
+      },
+      (error) => {
+        console.warn("Erro no listener em tempo real de configurações:", error);
+      }
+    );
+
+    // 2. Ouvinte em tempo real para coleção de lançamentos (Entries)
     const entriesCol = collection(db, "users", uid, "entries");
     const entriesQuery = query(entriesCol, orderBy("date", "desc"));
-    const querySnapshot = await getDocs(entriesQuery);
-
-    state.rawEntries = [];
-    querySnapshot.forEach((d) => {
-      state.rawEntries.push({ id: d.id, ...d.data() });
-    });
-
-    // Check if there are local guest entries to migrate
-    const guestEntries = JSON.parse(localStorage.getItem("finflow_guest_entries") || "[]");
-    if (guestEntries.length > 0 && state.rawEntries.length === 0) {
-      for (const entry of guestEntries) {
-        const { id, ...entryData } = entry;
-        const newDoc = await addDoc(collection(db, "users", uid, "entries"), {
-          ...entryData,
-          createdAt: entryData.createdAt || new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+    unsubscribeEntries = onSnapshot(
+      entriesQuery,
+      async (querySnapshot) => {
+        state.rawEntries = [];
+        querySnapshot.forEach((d) => {
+          state.rawEntries.push({ id: d.id, ...d.data() });
         });
-        state.rawEntries.push({ id: newDoc.id, ...entryData });
-      }
-      localStorage.removeItem("finflow_guest_entries");
-      showToast("Seus lançamentos locais foram sincronizados na nuvem!");
-    }
 
-    recalculateAndRender();
+        // Migração de lançamentos locais de visitante se a nuvem estiver vazia
+        const guestEntries = JSON.parse(localStorage.getItem("finflow_guest_entries") || "[]");
+        if (guestEntries.length > 0 && state.rawEntries.length === 0) {
+          for (const entry of guestEntries) {
+            const { id, ...entryData } = entry;
+            await addDoc(collection(db, "users", uid, "entries"), {
+              ...entryData,
+              createdAt: entryData.createdAt || new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+          }
+          localStorage.removeItem("finflow_guest_entries");
+          showToast("Seus lançamentos locais foram sincronizados na nuvem!");
+        }
+
+        recalculateAndRender();
+      },
+      (error) => {
+        console.error("Erro no listener em tempo real do Firestore:", error);
+        showToast("Aviso: operando com dados locais / offline.");
+      }
+    );
   } catch (error) {
-    console.error("Erro ao carregar dados do Firestore:", error);
+    console.error("Erro ao inicializar conexão com Firestore:", error);
     showToast("Aviso: operando com dados locais.");
   }
 }
@@ -642,7 +673,6 @@ async function handleEntrySubmit(event) {
         await addDoc(collection(db, "users", uid, "entries"), payload);
         showToast("Novo lançamento salvo na nuvem!");
       }
-      await loadUserData();
     } else {
       // LocalStorage fallback for guests / offline
       if (isEdit) {
@@ -681,7 +711,6 @@ async function handleEntryDelete() {
   try {
     if (state.user && !id.startsWith("local_")) {
       await deleteDoc(doc(db, "users", state.user.uid, "entries", id));
-      await loadUserData();
     } else {
       state.rawEntries = state.rawEntries.filter((e) => e.id !== id);
       saveGuestData();

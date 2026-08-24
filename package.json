@@ -1,0 +1,32 @@
+{
+  "name": "fin-flow",
+  "version": "1.0.0",
+  "description": "FinFlow - Gestão Financeira Pessoal Multiplataforma (Web, Android e iOS)",
+  "main": "static/app.js",
+  "scripts": {
+    "sync": "cap sync",
+    "cap:sync": "cap sync",
+    "cap:copy": "cap copy",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios",
+    "build:apk": "cd android && gradlew assembleDebug"
+  },
+  "keywords": [
+    "finflow",
+    "finance",
+    "capacitor",
+    "android",
+    "ios",
+    "firebase"
+  ],
+  "author": "FinFlow Team",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/android": "^7.0.1",
+    "@capacitor/cli": "^7.0.1",
+    "@capacitor/core": "^7.0.1",
+    "@capacitor/ios": "^7.0.1",
+    "@capacitor/splash-screen": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0"
+  }
+}

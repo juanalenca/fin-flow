@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="finflow-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDB72D" />
+      <stop offset="100%" stop-color="#E5A324" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="#070604" />
+  <!-- Inner Glow Ring -->
+  <rect x="24" y="24" width="464" height="464" rx="96" fill="none" stroke="rgba(253, 183, 45, 0.2)" stroke-width="4" />
+  <!-- Icon Center Symbol Container -->
+  <g filter="url(#shadow)" transform="translate(106, 106)">
+    <rect width="300" height="300" rx="64" fill="url(#finflow-grad)" />
+    <!-- FinFlow Coin / Currency Path -->
+    <path d="M150 40 V260 M205 85 H120 C85 85 85 150 150 150 C215 150 215 215 180 215 H95" 
+          fill="none" 
+          stroke="#070604" 
+          stroke-width="26" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" />
+  </g>
+</svg>

@@ -1,0 +1,18 @@
+{
+  "name": "FinFlow · Gestão Financeira Pessoal",
+  "short_name": "FinFlow",
+  "description": "Controle financeiro pessoal 50/30/20 com carteira VR e sincronização em tempo real.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#070604",
+  "theme_color": "#070604",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+name: Build Android APK (FinFlow)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    name: Compilar APK Android
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do Código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Configurar Java JDK (v17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar Dependências do Projeto
+        run: npm install
+
+      - name: Sincronizar Assets Web com o Capacitor Android
+        run: npx cap sync android
+
+      - name: Conceder permissão de execução ao Gradle Wrapper
+        run: chmod +x android/gradlew
+
+      - name: Compilar APK de Depuração (Debug)
+        run: |
+          cd android
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Disponibilizar APK para Download (Artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinFlow-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
