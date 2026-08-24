@@ -1,8 +1,47 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // FinFlow: regras de usuários autenticados
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Mapeamento Esportivo: regras da pesquisa pública e painel
+    function validSport(value) {
+      return value in ['Futebol', 'Vôlei', 'Futsal', 'Basquete', 'Corrida/caminhada', 'Ciclismo', 'Musculação/academia', 'Dança', 'Artes marciais', 'Outro'];
+    }
+    function validFrequency(value) {
+      return value in ['Todos os dias', '4–6 vezes por semana', '2–3 vezes por semana', '1 vez por semana', 'Menos de 1 vez por semana', 'Não pratico'];
+    }
+    function validBarriers(value) {
+      return value.hasOnly(['Falta de tempo', 'Falta de espaço', 'Falta de equipamentos', 'Falta de dinheiro', 'Falta de companhia', 'Falta de oportunidade na escola', 'Falta de interesse', 'Outro', 'Nada dificulta'])
+        && value.size() > 0 && value.size() <= 9
+        && (!value.hasAny(['Nada dificulta']) || value.size() == 1);
+    }
+    function validResponse() {
+      return request.resource.data.keys().hasOnly(['practicesSport', 'practicedSports', 'frequency', 'desiredSport', 'barriers', 'desiredAtSchool', 'createdAt'])
+        && request.resource.data.keys().hasAll(['practicesSport', 'practicedSports', 'frequency', 'desiredSport', 'barriers', 'desiredAtSchool', 'createdAt'])
+        && request.resource.data.practicesSport is bool
+        && request.resource.data.practicedSports is list
+        && request.resource.data.practicedSports.size() <= 10
+        && request.resource.data.practicedSports.hasOnly(['Futebol', 'Vôlei', 'Futsal', 'Basquete', 'Corrida/caminhada', 'Ciclismo', 'Musculação/academia', 'Dança', 'Artes marciais', 'Outro'])
+        && validFrequency(request.resource.data.frequency)
+        && validSport(request.resource.data.desiredSport)
+        && validBarriers(request.resource.data.barriers)
+        && validSport(request.resource.data.desiredAtSchool)
+        && request.resource.data.createdAt == request.time
+        && ((request.resource.data.practicesSport && request.resource.data.practicedSports.size() > 0 && request.resource.data.frequency != 'Não pratico')
+          || (!request.resource.data.practicesSport && request.resource.data.practicedSports.size() == 0 && request.resource.data.frequency == 'Não pratico'));
+    }
+
+    match /surveyResponses/{responseId} {
+      allow create: if validResponse();
+      allow read, update, delete: if false;
+    }
+
+    match /dashboardStats/current {
+      allow get: if true;
+      allow list, create, update, delete: if false;
     }
   }
 }
