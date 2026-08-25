@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-apk:
     name: Compilar APK Android (Release & Debug)
@@ -43,18 +46,27 @@ jobs:
           cd android
           ./gradlew assembleRelease assembleDebug --no-daemon --stacktrace
 
-      - name: Criar Chave Criptográfica e Assinar APK de Release (V2/V3/V4)
+      - name: Criar Chave Criptográfica Permanente e Assinar APK de Release (V2/V3/V4)
         run: |
-          # 1. Gerar Keystore RSA 2048-bit
-          keytool -genkeypair -v \
-            -keystore release.keystore \
-            -alias finflow-release-key \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass finflow_secure_pass_2026 \
-            -keypass finflow_secure_pass_2026 \
-            -dname "CN=FinFlow, OU=Mobile Security, O=FinFlow Org, L=Sao Paulo, ST=SP, C=BR"
+          # 1. Gerar ou reutilizar Keystore Permanente
+          if [ ! -f android/app/finflow-release.keystore ]; then
+            echo "Gerando Keystore Permanente de Release..."
+            keytool -genkeypair -v \
+              -keystore android/app/finflow-release.keystore \
+              -alias finflow-release-key \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass finflow_secure_pass_2026 \
+              -keypass finflow_secure_pass_2026 \
+              -dname "CN=FinFlow, OU=Mobile Security, O=FinFlow Org, L=Sao Paulo, ST=SP, C=BR"
+            
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add android/app/finflow-release.keystore
+            git commit -m "chore(keystore): armazena chave criptografica de release permanente" || true
+            git push origin main || true
+          fi
 
           # 2. Localizar ferramentas de build do Android SDK (zipalign e apksigner)
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
@@ -67,7 +79,7 @@ jobs:
 
           # 4. Assinatura com apksigner (Esquemas V2, V3 e V4)
           $BUILD_TOOLS_DIR/apksigner sign \
-            --ks release.keystore \
+            --ks android/app/finflow-release.keystore \
             --ks-pass pass:finflow_secure_pass_2026 \
             --ks-key-alias finflow-release-key \
             --key-pass pass:finflow_secure_pass_2026 \
@@ -77,9 +89,9 @@ jobs:
           # 5. Verificação da assinatura e extração das chaves SHA-1 / SHA-256
           $BUILD_TOOLS_DIR/apksigner verify --verbose android/app/build/outputs/apk/release/FinFlow-Release-Signed.apk
 
-          echo "### 🔑 Impressões Digitais do Certificado para o Firebase Console" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔑 Impressões Digitais PERMANENTES do Certificado para o Firebase Console" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          keytool -list -v -keystore release.keystore -alias finflow-release-key -storepass finflow_secure_pass_2026 | grep -E "SHA1|SHA256" >> $GITHUB_STEP_SUMMARY
+          keytool -list -v -keystore android/app/finflow-release.keystore -alias finflow-release-key -storepass finflow_secure_pass_2026 | grep -E "SHA1|SHA256" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Disponibilizar APK de Release Assinado (Recomendado para Instalação)

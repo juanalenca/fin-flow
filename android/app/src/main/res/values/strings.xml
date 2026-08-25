@@ -4,4 +4,5 @@
     <string name="title_activity_main">FinFlow</string>
     <string name="package_name">com.finflow.app</string>
     <string name="custom_url_scheme">com.finflow.app</string>
+    <string name="default_web_client_id">256881997860-frca7va3vpbq2sc1vhpk9io1oqneh6u1.apps.googleusercontent.com</string>
 </resources>
