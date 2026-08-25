@@ -173,8 +173,8 @@ function unsubscribeUserData() {
    INITIALIZATION & AUTO-UPDATES
    ========================================================================== */
 
-const CURRENT_APP_VERSION = "1.0.0";
-const CURRENT_VERSION_CODE = 1;
+const CURRENT_APP_VERSION = "1.0.2";
+const CURRENT_VERSION_CODE = 2;
 
 document.addEventListener("DOMContentLoaded", () => {
   initLiveUpdates();
@@ -1111,223 +1111,143 @@ function renderBudgetBars() {
 
 function renderCharts() {
   try {
-    drawDistributionChart(document.querySelector("#distribution-chart"));
+    renderDistributionChart();
   } catch (err) {
-    console.error("Erro ao desenhar Gráfico de Distribuição:", err);
+    console.error("Erro ao renderizar Gráfico de Distribuição:", err);
   }
 
   try {
-    drawTimelineChart(document.querySelector("#timeline-chart"));
+    renderTimelineChart();
   } catch (err) {
-    console.error("Erro ao desenhar Gráfico de Evolução:", err);
+    console.error("Erro ao renderizar Gráfico de Evolução:", err);
   }
 }
 
-function drawRoundedRect(ctx, x, y, w, h, r = 4) {
-  if (typeof ctx.roundRect === "function") {
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, r);
-    ctx.fill();
-  } else {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.arcTo(x + w, y, x + w, y + r, r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-    ctx.lineTo(x + r, y + h);
-    ctx.arcTo(x, y + h, x, y + h - r, r);
-    ctx.lineTo(x, y + r);
-    ctx.arcTo(x, y, x + r, y, r);
-    ctx.closePath();
-    ctx.fill();
-  }
-}
+function renderDistributionChart() {
+  const container = document.querySelector("#distribution-chart-wrap");
+  if (!container) return;
 
-function setChartEmptyState(canvas, isEmpty, title, description) {
-  if (!canvas) return;
-  const wrapper = canvas.closest(".canvas-wrapper");
-  if (!wrapper) return;
-
-  wrapper.classList.toggle("is-empty", isEmpty);
-  let emptyState = wrapper.querySelector(".chart-empty-state");
-
-  if (isEmpty) {
-    if (!emptyState) {
-      emptyState = document.createElement("div");
-      emptyState.className = "chart-empty-state";
-      wrapper.appendChild(emptyState);
-    }
-    emptyState.innerHTML = `
-      <div class="chart-empty-icon" aria-hidden="true">
-        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 3v18h18"></path>
-          <path d="M7 15h3v3H7z"></path>
-          <path d="M12 11h3v7h-3z"></path>
-          <path d="M17 7h3v11h-3z"></path>
-        </svg>
-      </div>
-      <strong>${escapeHtml(title)}</strong>
-      <span>${escapeHtml(description)}</span>`;
-  } else if (emptyState) {
-    emptyState.remove();
-  }
-}
-
-function setupCanvas(canvas) {
-  if (!canvas) return null;
-  const dpr = window.devicePixelRatio || 1;
-  const parent = canvas.parentElement;
-  const rect = canvas.getBoundingClientRect();
-  const width = Math.max(Math.floor(rect.width) || (parent ? parent.clientWidth : 0) || 300, 260);
-  const height = Number(canvas.getAttribute("height")) || 230;
-
-  canvas.width = Math.floor(width * dpr);
-  canvas.height = Math.floor(height * dpr);
-  canvas.style.width = "100%";
-  canvas.style.height = `${height}px`;
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  ctx.setTransform(1, 0, 0, 1, 0, 0); // Reseta a matriz de transformação antes da escala para não acumular zoom
-  ctx.scale(dpr, dpr);
-  return { ctx, width, height };
-}
-
-function drawDistributionChart(canvas) {
-  if (!canvas) return;
-  const items = ["needs", "wants", "savings", "vr"].map((key) => ({
-    key,
-    label: labels[key],
-    value: key === "vr" ? state.summary.vr.period_spent_cents : state.summary.budgets[key]?.spent_cents || 0,
-  }));
+  const items = [
+    { key: "needs", label: labels.needs, color: colors.needs, value: state.summary?.budgets?.needs?.spent_cents || 0 },
+    { key: "wants", label: labels.wants, color: colors.wants, value: state.summary?.budgets?.wants?.spent_cents || 0 },
+    { key: "savings", label: labels.savings, color: colors.savings, value: state.summary?.budgets?.savings?.spent_cents || 0 },
+    { key: "vr", label: labels.vr, color: colors.vr, value: state.summary?.vr?.period_spent_cents || 0 },
+  ];
 
   const total = items.reduce((sum, item) => sum + item.value, 0);
-  setChartEmptyState(
-    canvas,
-    !total,
-    "Sem gastos para distribuir",
-    "Registre uma despesa ou ajuste o período para visualizar a divisão por orçamento."
-  );
-  if (!total) return;
 
-  const canvasSetup = setupCanvas(canvas);
-  if (!canvasSetup) return;
-  const { ctx, width, height } = canvasSetup;
-  ctx.clearRect(0, 0, width, height);
+  if (!total) {
+    container.innerHTML = `
+      <div class="chart-empty-state">
+        <div class="chart-empty-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+            <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+          </svg>
+        </div>
+        <strong>Sem gastos no período</strong>
+        <span>Adicione despesas neste mês para visualizar a divisão percentual dos seus gastos.</span>
+      </div>`;
+    return;
+  }
 
-  const isMobile = width < 420;
+  // Geração das fatias do Donut em SVG vetorial de alta definição
+  const size = 200;
+  const cx = 100;
+  const cy = 100;
+  const rOuter = 82;
+  const rInner = 54;
 
-  const cx = isMobile ? width * 0.5 : width * 0.32;
-  const cy = isMobile ? 80 : height * 0.5;
-  const outerRadius = isMobile ? 60 : Math.min(width, height) * 0.36;
-  const innerRadius = outerRadius * 0.58;
+  let currentAngle = -Math.PI / 2;
+  const paths = [];
 
-  // Draw Slices
-  let angle = -Math.PI / 2;
   items.forEach((item) => {
     if (!item.value) return;
-    const slice = (item.value / total) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.arc(cx, cy, outerRadius, angle, angle + slice);
-    ctx.arc(cx, cy, innerRadius, angle + slice, angle, true);
-    ctx.closePath();
-    ctx.fillStyle = colors[item.key];
-    ctx.fill();
-    angle += slice;
+    const sliceAngle = (item.value / total) * Math.PI * 2;
+    const endAngle = currentAngle + sliceAngle;
+
+    const x1Outer = cx + rOuter * Math.cos(currentAngle);
+    const y1Outer = cy + rOuter * Math.sin(currentAngle);
+    const x2Outer = cx + rOuter * Math.cos(endAngle);
+    const y2Outer = cy + rOuter * Math.sin(endAngle);
+
+    const x1Inner = cx + rInner * Math.cos(endAngle);
+    const y1Inner = cy + rInner * Math.sin(endAngle);
+    const x2Inner = cx + rInner * Math.cos(currentAngle);
+    const y2Inner = cy + rInner * Math.sin(currentAngle);
+
+    const largeArc = sliceAngle > Math.PI ? 1 : 0;
+
+    const d = [
+      `M ${x1Outer.toFixed(2)} ${y1Outer.toFixed(2)}`,
+      `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${x2Outer.toFixed(2)} ${y2Outer.toFixed(2)}`,
+      `L ${x1Inner.toFixed(2)} ${y1Inner.toFixed(2)}`,
+      `A ${rInner} ${rInner} 0 ${largeArc} 0 ${x2Inner.toFixed(2)} ${y2Inner.toFixed(2)}`,
+      "Z",
+    ].join(" ");
+
+    paths.push(`<path d="${d}" fill="${item.color}" class="donut-slice" />`);
+    currentAngle = endAngle;
   });
 
-  // Center Total
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "#57534E";
-  ctx.font = "800 10px 'Plus Jakarta Sans', system-ui, sans-serif";
-  ctx.fillText("TOTAL GASTO", cx, cy - 8);
-  ctx.fillStyle = "#070604";
-  ctx.font = "800 14px 'Plus Jakarta Sans', system-ui, sans-serif";
-  ctx.fillText(money(total), cx, cy + 10);
-
-  // Legend List
-  if (isMobile) {
-    items.forEach((item, index) => {
-      const col = index % 2;
-      const row = Math.floor(index / 2);
-      const lx = col === 0 ? 16 : width * 0.52;
-      const ly = 160 + row * 28;
+  const legendHtml = items
+    .map((item) => {
       const pct = total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
+      return `
+        <div class="donut-legend-item">
+          <div class="donut-legend-left">
+            <span class="donut-legend-dot" style="background:${item.color}"></span>
+            <span class="donut-legend-name">${escapeHtml(item.label)}</span>
+            <span class="donut-legend-pct">${pct}%</span>
+          </div>
+          <strong class="donut-legend-val">${money(item.value)}</strong>
+        </div>`;
+    })
+    .join("");
 
-      ctx.fillStyle = colors[item.key];
-      drawRoundedRect(ctx, lx, ly - 8, 8, 8, 2);
-
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "#070604";
-      ctx.font = "700 11px 'Plus Jakarta Sans', system-ui, sans-serif";
-      ctx.fillText(`${item.label} (${pct}%)`, lx + 14, ly - 8);
-      ctx.fillStyle = "#57534E";
-      ctx.font = "600 10px 'Plus Jakarta Sans', system-ui, sans-serif";
-      ctx.fillText(money(item.value), lx + 14, ly + 6);
-    });
-  } else {
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-    items.forEach((item, index) => {
-      const y = 38 + index * 38;
-      const pct = total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
-
-      ctx.fillStyle = colors[item.key];
-      drawRoundedRect(ctx, width * 0.60, y - 10, 10, 10, 3);
-
-      ctx.fillStyle = "#070604";
-      ctx.font = "800 12px 'Plus Jakarta Sans', system-ui, sans-serif";
-      ctx.fillText(`${item.label} (${pct}%)`, width * 0.60 + 16, y);
-
-      ctx.fillStyle = "#57534E";
-      ctx.font = "600 11px 'Plus Jakarta Sans', system-ui, sans-serif";
-      ctx.fillText(money(item.value), width * 0.60 + 16, y + 16);
-    });
-  }
+  container.innerHTML = `
+    <div class="donut-layout-wrap">
+      <div class="donut-svg-wrap">
+        <svg viewBox="0 0 ${size} ${size}" class="donut-svg" aria-label="Gráfico de Distribuição">
+          ${paths.join("")}
+          <text x="${cx}" y="${cy - 7}" text-anchor="middle" class="donut-center-label">TOTAL GASTO</text>
+          <text x="${cx}" y="${cy + 13}" text-anchor="middle" class="donut-center-val">${money(total)}</text>
+        </svg>
+      </div>
+      <div class="donut-legend-grid">
+        ${legendHtml}
+      </div>
+    </div>`;
 }
 
-function drawTimelineChart(canvas) {
-  if (!canvas) return;
+function renderTimelineChart() {
+  const container = document.querySelector("#timeline-chart-wrap");
+  if (!container) return;
+
   const expenses = state.filteredEntries
     .filter((entry) => entry.entry_kind === "expense")
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  setChartEmptyState(
-    canvas,
-    !expenses.length,
-    "Sem evolução no período",
-    "Quando houver lançamentos, a curva acumulada aparecerá aqui sem ocupar espaço vazio."
-  );
-  if (!expenses.length) return;
-
-  const canvasSetup = setupCanvas(canvas);
-  if (!canvasSetup) return;
-  const { ctx, width, height } = canvasSetup;
-  ctx.clearRect(0, 0, width, height);
-
-  const padLeft = 40;
-  const padRight = 30;
-  const padTop = 35;
-  const padBottom = 30;
-  const chartWidth = width - padLeft - padRight;
-  const chartHeight = height - padTop - padBottom;
-
-  // Grid Lines
-  ctx.strokeStyle = "#E5DFC9";
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 3; i++) {
-    const y = padTop + (chartHeight / 3) * i;
-    ctx.beginPath();
-    ctx.moveTo(padLeft, y);
-    ctx.lineTo(width - padRight, y);
-    ctx.stroke();
+  if (!expenses.length) {
+    container.innerHTML = `
+      <div class="chart-empty-state">
+        <div class="chart-empty-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+        </div>
+        <strong>Sem evolução no período</strong>
+        <span>A curva de gastos acumulados aparecerá assim que você registrar despesas no período.</span>
+      </div>`;
+    return;
   }
 
   const totalsByDay = new Map();
-  expenses.forEach((entry) => totalsByDay.set(entry.date, (totalsByDay.get(entry.date) || 0) + entry.value_cents));
+  expenses.forEach((entry) => {
+    totalsByDay.set(entry.date, (totalsByDay.get(entry.date) || 0) + entry.value_cents);
+  });
   const points = [...totalsByDay.entries()].map(([date, value]) => ({ date, value }));
 
   let running = 0;
@@ -1336,77 +1256,76 @@ function drawTimelineChart(canvas) {
     point.total = running;
   });
 
-  const max = Math.max(...points.map((point) => point.total), 1);
+  const max = Math.max(...points.map((p) => p.total), 1);
+  const finalTotal = points[points.length - 1].total;
 
-  // Draw Area Gradient (Gold Amber)
-  const gradient = ctx.createLinearGradient(0, padTop, 0, height - padBottom);
-  gradient.addColorStop(0, "rgba(253, 183, 45, 0.35)");
-  gradient.addColorStop(1, "rgba(253, 183, 45, 0.0)");
+  const svgWidth = 600;
+  const svgHeight = 200;
+  const padL = 60;
+  const padR = 25;
+  const padT = 25;
+  const padB = 25;
+  const innerW = svgWidth - padL - padR;
+  const innerH = svgHeight - padT - padB;
 
-  ctx.beginPath();
-  if (points.length === 1) {
-    const y = height - padBottom - (points[0].total / max) * chartHeight;
-    ctx.moveTo(padLeft, height - padBottom);
-    ctx.lineTo(padLeft, y);
-    ctx.lineTo(width - padRight, y);
-    ctx.lineTo(width - padRight, height - padBottom);
+  // Linhas de Grade e Eixo Y
+  const gridLines = [0, 1, 2, 3]
+    .map((i) => {
+      const y = padT + (innerH / 3) * i;
+      const val = Math.round(max - (max / 3) * i);
+      return `
+        <line x1="${padL}" y1="${y}" x2="${svgWidth - padR}" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3" />
+        <text x="${padL - 8}" y="${y + 4}" text-anchor="end" class="timeline-axis-label">${money(val)}</text>
+      `;
+    })
+    .join("");
+
+  // Cálculo das Coordenadas dos Pontos
+  const coords = points.map((p, idx) => {
+    const x = points.length === 1 ? padL + innerW / 2 : padL + (idx / (points.length - 1)) * innerW;
+    const y = padT + innerH - (p.total / max) * innerH;
+    return { x, y, date: p.date, total: p.total };
+  });
+
+  let areaPath = "";
+  let linePath = "";
+
+  if (coords.length === 1) {
+    const pt = coords[0];
+    areaPath = `M ${padL} ${padT + innerH} L ${padL} ${pt.y.toFixed(1)} L ${svgWidth - padR} ${pt.y.toFixed(1)} L ${svgWidth - padR} ${padT + innerH} Z`;
+    linePath = `M ${padL} ${pt.y.toFixed(1)} L ${svgWidth - padR} ${pt.y.toFixed(1)}`;
   } else {
-    points.forEach((point, index) => {
-      const x = padLeft + (index / (points.length - 1)) * chartWidth;
-      const y = height - padBottom - (point.total / max) * chartHeight;
-      if (index === 0) {
-        ctx.moveTo(x, height - padBottom);
-        ctx.lineTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
-    });
-    ctx.lineTo(width - padRight, height - padBottom);
+    const first = coords[0];
+    const last = coords[coords.length - 1];
+    const lineSegs = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(" ");
+    linePath = lineSegs;
+    areaPath = `${lineSegs} L ${last.x.toFixed(1)} ${(padT + innerH).toFixed(1)} L ${first.x.toFixed(1)} ${(padT + innerH).toFixed(1)} Z`;
   }
-  ctx.closePath();
-  ctx.fillStyle = gradient;
-  ctx.fill();
 
-  // Draw Line
-  ctx.strokeStyle = "#E5A324";
-  ctx.lineWidth = 3;
-  ctx.lineJoin = "round";
-  ctx.beginPath();
-  if (points.length === 1) {
-    const y = height - padBottom - (points[0].total / max) * chartHeight;
-    ctx.moveTo(padLeft, y);
-    ctx.lineTo(width - padRight, y);
-  } else {
-    points.forEach((point, index) => {
-      const x = padLeft + (index / (points.length - 1)) * chartWidth;
-      const y = height - padBottom - (point.total / max) * chartHeight;
-      if (index === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-  }
-  ctx.stroke();
+  const lastCoord = coords[coords.length - 1];
 
-  // Draw Last Point Dot
-  const lastPoint = points[points.length - 1];
-  const lastX = width - padRight;
-  const lastY = height - padBottom - (lastPoint.total / max) * chartHeight;
-  ctx.fillStyle = "#E5A324";
-  ctx.beginPath();
-  ctx.arc(lastX, lastY, 6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#070604";
-  ctx.beginPath();
-  ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Header stats
-  ctx.textAlign = "left";
-  ctx.fillStyle = "#57534E";
-  ctx.font = "700 12px 'Plus Jakarta Sans', system-ui, sans-serif";
-  ctx.fillText(`Acumulado final: `, padLeft, 18);
-  ctx.fillStyle = "#070604";
-  ctx.font = "800 12px 'Plus Jakarta Sans', system-ui, sans-serif";
-  ctx.fillText(money(lastPoint.total), padLeft + 105, 18);
+  container.innerHTML = `
+    <div class="timeline-chart-card-inner">
+      <div class="timeline-header-info">
+        <span class="timeline-header-subtitle">Acumulado do Período:</span>
+        <strong class="timeline-header-total">${money(finalTotal)}</strong>
+      </div>
+      <div class="timeline-svg-wrapper">
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="none" class="timeline-svg" aria-label="Gráfico de Evolução">
+          <defs>
+            <linearGradient id="timelineGoldGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#FDB72D" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="#FDB72D" stop-opacity="0.0"/>
+            </linearGradient>
+          </defs>
+          ${gridLines}
+          <path d="${areaPath}" fill="url(#timelineGoldGrad)" />
+          <path d="${linePath}" fill="none" stroke="#E5A324" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="${lastCoord.x.toFixed(1)}" cy="${lastCoord.y.toFixed(1)}" r="6" fill="#E5A324" />
+          <circle cx="${lastCoord.x.toFixed(1)}" cy="${lastCoord.y.toFixed(1)}" r="3" fill="#070604" />
+        </svg>
+      </div>
+    </div>`;
 }
 
 function renderCategory(key) {
