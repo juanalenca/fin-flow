@@ -170,8 +170,11 @@ function unsubscribeUserData() {
 }
 
 /* ==========================================================================
-   INITIALIZATION
+   INITIALIZATION & AUTO-UPDATES
    ========================================================================== */
+
+const CURRENT_APP_VERSION = "1.0.0";
+const CURRENT_VERSION_CODE = 1;
 
 document.addEventListener("DOMContentLoaded", () => {
   initLiveUpdates();
@@ -194,6 +197,11 @@ document.addEventListener("DOMContentLoaded", () => {
       loadGuestData();
     }
   });
+
+  // Verificação silenciosa de novas versões após a carga inicial
+  setTimeout(() => {
+    checkForUpdates(false);
+  }, 2500);
 });
 
 async function initLiveUpdates() {
@@ -202,11 +210,40 @@ async function initLiveUpdates() {
       const updater = window.Capacitor?.Plugins?.CapacitorUpdater;
       if (updater && typeof updater.notifyAppReady === "function") {
         await updater.notifyAppReady();
-        console.log("Capgo Live Updates: Versão web validada com sucesso no dispositivo nativo.");
+        console.log("Capgo Live Updates: Versão validada com sucesso.");
       }
     } catch (err) {
       console.warn("Capgo Live Updates:", err);
     }
+  }
+}
+
+async function checkForUpdates(manual = false) {
+  try {
+    const res = await fetch("version.json?t=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) return;
+    const remote = await res.json();
+
+    if (remote && Number(remote.versionCode) > CURRENT_VERSION_CODE) {
+      const updateDialog = document.querySelector("#update-dialog");
+      if (updateDialog) {
+        text("#update-modal-version", `FinFlow v${remote.version}`);
+        text("#update-modal-notes", remote.notes || "Nova versão disponível com melhorias e correções.");
+        text("#update-modal-date", remote.releasedAt ? formatDate(remote.releasedAt) : "Hoje");
+        const downloadBtn = document.querySelector("#update-modal-download");
+        if (downloadBtn) {
+          downloadBtn.href = remote.apkUrl || "https://github.com/juanalenca/fin-flow/releases/latest/download/FinFlow-Release-Signed.apk";
+        }
+        updateDialog.showModal();
+      }
+    } else if (manual) {
+      showToast(`Você já está na versão mais recente (v${CURRENT_APP_VERSION}).`);
+    }
+  } catch (err) {
+    if (manual) {
+      showToast("Não foi possível verificar atualizações no momento.");
+    }
+    console.warn("In-App update check:", err);
   }
 }
 
@@ -230,6 +267,14 @@ function wireEvents() {
 
   // Google Login
   if (els.googleAuthBtn) els.googleAuthBtn.addEventListener("click", handleGoogleAuth);
+
+  // Update Dialog
+  const updateModalLater = document.querySelector("#update-modal-later");
+  if (updateModalLater) {
+    updateModalLater.addEventListener("click", () => {
+      document.querySelector("#update-dialog")?.close();
+    });
+  }
 
   // Auth Mode Tabs
   document.querySelectorAll("[data-auth-mode]").forEach((btn) => {

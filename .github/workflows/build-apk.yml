@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-apk:
     name: Compilar APK Android (Release & Debug)
@@ -43,6 +46,10 @@ jobs:
           cd android
           ./gradlew assembleRelease assembleDebug --no-daemon --stacktrace
 
+      - name: Preparar Nomes dos Arquivos de Release
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk android/app/build/outputs/apk/release/FinFlow-Release-Signed.apk
+
       - name: Extrair Impressão Digital SHA-1 da Keystore Permanente
         run: |
           echo "### 🔑 Impressão Digital PERMANENTE do seu APK para o Firebase Console:" >> $GITHUB_STEP_SUMMARY
@@ -51,16 +58,30 @@ jobs:
           keytool -list -v -keystore android/app/finflow-release.keystore -alias finflow-release-key -storepass finflow_secure_pass_2026 | grep "SHA256:" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
-      - name: Disponibilizar APK de Release Assinado (Recomendado para Instalação)
+      - name: Disponibilizar APK de Release Assinado (Artifacts)
         uses: actions/upload-artifact@v4
         with:
           name: FinFlow-Release-Signed-APK
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: android/app/build/outputs/apk/release/FinFlow-Release-Signed.apk
           retention-days: 30
 
-      - name: Disponibilizar APK de Debug (Opcional para Testes com Logs)
+      - name: Disponibilizar APK de Debug (Artifacts)
         uses: actions/upload-artifact@v4
         with:
           name: FinFlow-Debug-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
+      - name: Publicar APK Direto no GitHub Releases (Download Automático In-App)
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: latest
+          name: "FinFlow Release Oficial (APK)"
+          body: |
+            ### 📱 FinFlow - Versão Oficial Pronta para Instalação
+            - **Download Direto do APK**: [FinFlow-Release-Signed.apk](https://github.com/juanalenca/fin-flow/releases/latest/download/FinFlow-Release-Signed.apk)
+            - Autenticação Google nativa.
+            - Sistema de verificação e notificação de atualizações automáticas dentro do app.
+          files: |
+            android/app/build/outputs/apk/release/FinFlow-Release-Signed.apk
