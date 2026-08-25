@@ -334,7 +334,15 @@ async function handleGoogleAuth() {
       }
 
       // Autenticação nativa oficial do Android / iOS (Janela de 1 toque nativa)
-      const res = await nativeAuth.signInWithGoogle();
+      let res;
+      try {
+        // Tenta fluxo com Credential Manager do Android
+        res = await nativeAuth.signInWithGoogle();
+      } catch (credErr) {
+        console.warn("CredentialManager failed, tentando GoogleSignIn padrão:", credErr);
+        // Tenta fallback com GoogleSignInClient clássico
+        res = await nativeAuth.signInWithGoogle({ useCredentialManager: false });
+      }
       
       if (res && res.credential && res.credential.idToken) {
         const credential = GoogleAuthProvider.credential(res.credential.idToken);
@@ -372,12 +380,12 @@ async function handleGoogleAuth() {
       return;
     }
     let msg = "Erro ao autenticar com o Google.";
-    if (error.code === "auth/unauthorized-domain") {
+    if (error.message?.includes("No credentials available") || error.message?.includes("10:") || error.message?.includes("DEVELOPER_ERROR")) {
+      msg = "Configuração do Google pendente no Firebase: O 'ID do Cliente Web' e a chave 'SHA-1' precisam ser vinculados no Firebase Console. Utilize o login por E-mail e Senha.";
+    } else if (error.code === "auth/unauthorized-domain") {
       msg = "Domínio não autorizado pelo Firebase. Utilize login por E-mail e Senha.";
     } else if (error.code === "auth/operation-not-allowed") {
       msg = "O login com o Google precisa ser ativado no Firebase Console (Authentication > Sign-in method).";
-    } else if (error.message?.includes("10:") || error.message?.includes("DEVELOPER_ERROR")) {
-      msg = "Configuração do Google no Firebase pendente: adicione a chave SHA-1 do aplicativo no Firebase Console.";
     } else if (error.message) {
       msg = `${error.message} (${error.code || 'erro'})`;
     }
