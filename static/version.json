@@ -1,7 +1,7 @@
 {
-  "version": "1.0.2",
-  "versionCode": 2,
+  "version": "1.0.3",
+  "versionCode": 3,
   "apkUrl": "https://github.com/juanalenca/fin-flow/releases/latest/download/FinFlow-Release-Signed.apk",
-  "notes": "Correção de gráficos de distribuição e evolução acumulada, login Google nativo de 1 toque e sistema de auto-atualização in-app.",
+  "notes": "Nova experiência visual de luxo Fintech (Obsidian & Gold), Glass Dock inferior com FAB, Bottom Sheet nativo e extrato agrupado por dia.",
   "releasedAt": "2026-08-25"
 }

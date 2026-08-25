@@ -173,8 +173,8 @@ function unsubscribeUserData() {
    INITIALIZATION & AUTO-UPDATES
    ========================================================================== */
 
-const CURRENT_APP_VERSION = "1.0.2";
-const CURRENT_VERSION_CODE = 2;
+const CURRENT_APP_VERSION = "1.0.3";
+const CURRENT_VERSION_CODE = 3;
 
 document.addEventListener("DOMContentLoaded", () => {
   initLiveUpdates();
@@ -308,6 +308,9 @@ function wireEvents() {
   const openEntryDesktop = document.querySelector("#open-entry");
   if (openEntryDesktop) openEntryDesktop.addEventListener("click", triggerEntry);
   if (els.mobileOpenEntry) els.mobileOpenEntry.addEventListener("click", triggerEntry);
+
+  const mobileDockNewBtn = document.querySelector("#mobile-dock-new-btn");
+  if (mobileDockNewBtn) mobileDockNewBtn.addEventListener("click", triggerEntry);
 
   document.querySelector("#close-entry").addEventListener("click", () => els.entryDialog.close());
   document.querySelector("#cancel-entry").addEventListener("click", () => els.entryDialog.close());
@@ -1381,51 +1384,89 @@ function renderEntryList(container, entries) {
   container.innerHTML = "";
   if (!entries || !entries.length) {
     container.innerHTML = `
-      <div class="empty-state">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="8" y1="12" x2="16" y2="12"></line>
-        </svg>
-        <p>Nenhuma movimentação encontrada para o período selecionado.</p>
+      <div class="chart-empty-state">
+        <div class="chart-empty-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="8" y1="12" x2="16" y2="12"></line>
+          </svg>
+        </div>
+        <strong>Nenhum lançamento no período</strong>
+        <span>Adicione despesas ou receitas para acompanhar suas movimentações em tempo real.</span>
       </div>`;
     return;
   }
 
-  entries.forEach((entry) => {
-    const isIncome = entry.entry_kind === "income";
-    const sign = isIncome ? "+" : "-";
-    const amountClass = isIncome ? "amount-income" : "amount-expense";
-    const badgeMap = {
-      needs: { label: "50%", cls: "badge-needs" },
-      wants: { label: "30%", cls: "badge-wants" },
-      savings: { label: "20%", cls: "badge-savings" },
-      vr: { label: "VR", cls: "badge-vr" },
-    };
-    const badge = badgeMap[entry.budget_type] || { label: "R$", cls: "badge-needs" };
-    const noteText = entry.note ? `<span class="entry-tag-item">Obs: ${escapeHtml(entry.note)}</span>` : "";
+  // Ordena por data decrescente
+  const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+
+  // Agrupamento por dia
+  const groups = new Map();
+  sorted.forEach((entry) => {
+    if (!groups.has(entry.date)) groups.set(entry.date, []);
+    groups.get(entry.date).push(entry);
+  });
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayStr = yesterdayDate.toISOString().split("T")[0];
+
+  const badgeMap = {
+    needs: { label: "50%", cls: "badge-needs" },
+    wants: { label: "30%", cls: "badge-wants" },
+    savings: { label: "20%", cls: "badge-savings" },
+    vr: { label: "VR", cls: "badge-vr" },
+  };
+
+  groups.forEach((dayEntries, dateStr) => {
+    let dateLabel = formatDate(dateStr);
+    if (dateStr === todayStr) dateLabel = "Hoje";
+    else if (dateStr === yesterdayStr) dateLabel = "Ontem";
+
+    const dayTotal = dayEntries.reduce((sum, e) => (e.entry_kind === "expense" ? sum + e.value_cents : sum - e.value_cents), 0);
+
+    const rowsHtml = dayEntries
+      .map((entry) => {
+        const isIncome = entry.entry_kind === "income";
+        const sign = isIncome ? "+" : "-";
+        const valClass = isIncome ? "val-income" : "val-expense";
+        const badge = badgeMap[entry.budget_type] || { label: "R$", cls: "badge-needs" };
+        const noteText = entry.note ? `<span>Obs: ${escapeHtml(entry.note)}</span>` : "";
+
+        return `
+          <div class="entry-row-card">
+            <div class="entry-row-left">
+              <div class="entry-type-icon-badge ${badge.cls}">${badge.label}</div>
+              <div class="entry-row-details">
+                <strong class="entry-row-desc">${escapeHtml(entry.description)}</strong>
+                <div class="entry-row-meta-tags">
+                  <span>${escapeHtml(entry.category)}</span>
+                  <span>•</span>
+                  <span>${escapeHtml(entry.payment_method)}</span>
+                  ${noteText ? '<span>•</span>' + noteText : ''}
+                </div>
+              </div>
+            </div>
+            <div class="entry-row-right">
+              <span class="entry-row-value ${valClass}">${sign} ${money(entry.value_cents)}</span>
+              <div class="entry-row-actions">
+                <button class="btn btn-secondary btn-sm" type="button" data-edit="${entry.id}">Editar</button>
+              </div>
+            </div>
+          </div>`;
+      })
+      .join("");
 
     container.insertAdjacentHTML(
       "beforeend",
-      `<article class="entry-card">
-        <div class="entry-left">
-          <div class="entry-badge-icon ${badge.cls}">${badge.label}</div>
-          <div class="entry-info">
-            <div class="entry-title">${escapeHtml(entry.description)}</div>
-            <div class="entry-tags">
-              <span class="entry-tag-item">${formatDate(entry.date)}</span>
-              <span class="entry-tag-item">${escapeHtml(entry.category)}</span>
-              <span class="entry-tag-item">${escapeHtml(entry.payment_method)}</span>
-              ${noteText}
-            </div>
-          </div>
+      `<div class="entry-group-block">
+        <div class="entry-group-header">
+          <span class="entry-group-date-badge">${dateLabel}</span>
+          <span class="entry-group-subtotal">${dayTotal >= 0 ? money(dayTotal) : `+ ${money(Math.abs(dayTotal))}`}</span>
         </div>
-        <div class="entry-right">
-          <div class="entry-amount ${amountClass}">${sign} ${money(entry.value_cents)}</div>
-          <button class="btn btn-secondary btn-sm" type="button" data-edit="${entry.id}">
-            Editar
-          </button>
-        </div>
-      </article>`
+        ${rowsHtml}
+      </div>`
     );
   });
 

@@ -329,29 +329,32 @@
         </section>
       </main>
 
-      <!-- MOBILE BOTTOM NAVIGATION (6 ATALHOS ESSENCIAIS) -->
-      <nav class="mobile-nav" aria-label="Navegação Mobile">
-        <button class="mobile-nav-item active" data-view="overview">
+      <!-- MOBILE BOTTOM NAVIGATION (GLASS DOCK) -->
+      <nav class="mobile-bottom-nav" aria-label="Navegação Mobile">
+        <button class="mob-nav-item active" data-view="overview">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
           <span>Geral</span>
         </button>
-        <button class="mobile-nav-item" data-view="needs">
-          <span class="mobile-dot dot-needs"></span>
+        <button class="mob-nav-item" data-view="needs">
+          <span class="nav-dot dot-needs"></span>
           <span>50%</span>
         </button>
-        <button class="mobile-nav-item" data-view="wants">
-          <span class="mobile-dot dot-wants"></span>
+        <button class="mob-nav-item" data-view="wants">
+          <span class="nav-dot dot-wants"></span>
           <span>30%</span>
         </button>
-        <button class="mobile-nav-item" data-view="savings">
-          <span class="mobile-dot dot-savings"></span>
+        <button class="mob-fab-btn" id="mobile-dock-new-btn" type="button" aria-label="Novo Lançamento">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+        <button class="mob-nav-item" data-view="savings">
+          <span class="nav-dot dot-savings"></span>
           <span>20%</span>
         </button>
-        <button class="mobile-nav-item" data-view="vr">
-          <span class="mobile-dot dot-vr"></span>
+        <button class="mob-nav-item" data-view="vr">
+          <span class="nav-dot dot-vr"></span>
           <span>VR</span>
         </button>
-        <button class="mobile-nav-item" data-view="entries">
+        <button class="mob-nav-item" data-view="entries">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
           <span>Extrato</span>
         </button>
@@ -361,6 +364,7 @@
     <!-- DIALOG: MODAL CLEAN DE AUTENTICAÇÃO (GOOGLE + EMAIL/SENHA) -->
     <dialog id="auth-dialog" class="modern-modal modal-auth">
       <div class="modal-card">
+        <div class="modal-drag-handle"></div>
         <header class="auth-modal-header">
           <div class="auth-brand-center">
             <div class="brand-badge-auth">
@@ -435,6 +439,7 @@
     <!-- DIALOG: NOVO / EDITAR LANÇAMENTO (REDESENHADO) -->
     <dialog id="entry-dialog" class="modern-modal modal-entry">
       <div class="modal-card">
+        <div class="modal-drag-handle"></div>
         <header class="modal-header">
           <div class="modal-title-wrap">
             <div class="modal-icon">
@@ -562,6 +567,7 @@
     <!-- DIALOG: CONFIRMAÇÃO DE EXCLUSÃO -->
     <dialog id="confirm-dialog" class="modern-modal modal-sm">
       <div class="modal-card">
+        <div class="modal-drag-handle"></div>
         <div class="confirm-content">
           <div class="confirm-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -579,6 +585,7 @@
     <!-- DIALOG: NOTIFICAÇÃO DE NOVA ATUALIZAÇÃO -->
     <dialog id="update-dialog" class="modern-modal modal-update">
       <div class="modal-card">
+        <div class="modal-drag-handle"></div>
         <div class="update-header">
           <div class="update-badge-icon">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
