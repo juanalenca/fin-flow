@@ -2,7 +2,7 @@
   "appId": "com.finflow.app",
   "appName": "FinFlow",
   "webDir": "static",
-  "bundledWebRuntime": false,
+  "bundledWebRuntime": true,
   "server": {
     "androidScheme": "https"
   },

@@ -74,8 +74,13 @@ jobs:
             --out android/app/build/outputs/apk/release/FinFlow-Release-Signed.apk \
             android/app/build/outputs/apk/release/app-release-aligned.apk
 
-          # 5. Verificação da assinatura
+          # 5. Verificação da assinatura e extração das chaves SHA-1 / SHA-256
           $BUILD_TOOLS_DIR/apksigner verify --verbose android/app/build/outputs/apk/release/FinFlow-Release-Signed.apk
+
+          echo "### 🔑 Impressões Digitais do Certificado para o Firebase Console" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          keytool -list -v -keystore release.keystore -alias finflow-release-key -storepass finflow_secure_pass_2026 | grep -E "SHA1|SHA256" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Disponibilizar APK de Release Assinado (Recomendado para Instalação)
         uses: actions/upload-artifact@v4

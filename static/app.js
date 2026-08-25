@@ -325,12 +325,17 @@ function setAuthMode(mode) {
 async function handleGoogleAuth() {
   hideAlert(els.authMessage);
   try {
-    const isNative = typeof window.Capacitor !== "undefined" && window.Capacitor.isNativePlatform();
+    const isNative = Boolean(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
     const nativeAuth = window.Capacitor?.Plugins?.FirebaseAuthentication;
 
-    if (isNative && nativeAuth) {
-      // Autenticação nativa oficial do Android / iOS (Janela de 1 toque sem popup web)
+    if (isNative) {
+      if (!nativeAuth) {
+        throw new Error("Módulo de autenticação nativa indisponível no dispositivo. Utilize login por E-mail e Senha.");
+      }
+
+      // Autenticação nativa oficial do Android / iOS (Janela de 1 toque nativa)
       const res = await nativeAuth.signInWithGoogle();
+      
       if (res && res.credential && res.credential.idToken) {
         const credential = GoogleAuthProvider.credential(res.credential.idToken);
         const userCred = await signInWithCredential(auth, credential);
@@ -338,10 +343,19 @@ async function handleGoogleAuth() {
         showToast(`Bem-vindo(a), ${user.displayName || user.email}!`);
         els.authDialog.close();
         return;
+      } else if (res && res.user) {
+        state.user = res.user;
+        updateUserUI(res.user);
+        await loadUserData();
+        showToast(`Bem-vindo(a), ${res.user.displayName || res.user.email}!`);
+        els.authDialog.close();
+        return;
+      } else {
+        throw new Error("Não foi possível obter os dados da conta Google.");
       }
     }
 
-    // Fluxo padrão para navegadores web
+    // Fluxo exclusivo para navegadores web (desktop / mobile browser)
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
     showToast(`Bem-vindo(a), ${user.displayName || user.email}!`);
@@ -352,15 +366,18 @@ async function handleGoogleAuth() {
       error.code === "auth/popup-closed-by-user" || 
       error.code === "auth/cancelled-popup-request" ||
       error.message?.includes("CANCELED") ||
-      error.message?.includes("canceled")
+      error.message?.includes("canceled") ||
+      error.message?.includes("12501") // Google Sign-In user cancelled code
     ) {
       return;
     }
     let msg = "Erro ao autenticar com o Google.";
     if (error.code === "auth/unauthorized-domain") {
-      msg = "Domínio não autorizado pelo Firebase. Acesse o app publicado no Firebase Hosting ou use E-mail e Senha.";
+      msg = "Domínio não autorizado pelo Firebase. Utilize login por E-mail e Senha.";
     } else if (error.code === "auth/operation-not-allowed") {
       msg = "O login com o Google precisa ser ativado no Firebase Console (Authentication > Sign-in method).";
+    } else if (error.message?.includes("10:") || error.message?.includes("DEVELOPER_ERROR")) {
+      msg = "Configuração do Google no Firebase pendente: adicione a chave SHA-1 do aplicativo no Firebase Console.";
     } else if (error.message) {
       msg = `${error.message} (${error.code || 'erro'})`;
     }
