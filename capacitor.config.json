@@ -7,6 +7,10 @@
     "androidScheme": "https"
   },
   "plugins": {
+    "CapacitorUpdater": {
+      "autoUpdate": true,
+      "resetWhenUpdate": false
+    },
     "FirebaseAuthentication": {
       "skipNativeAuth": false,
       "providers": ["google.com"]

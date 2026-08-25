@@ -174,6 +174,7 @@ function unsubscribeUserData() {
    ========================================================================== */
 
 document.addEventListener("DOMContentLoaded", () => {
+  initLiveUpdates();
   wireEvents();
   hydrateFilterFields();
   setupCurrencyMasks();
@@ -194,6 +195,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+
+async function initLiveUpdates() {
+  if (window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform()) {
+    try {
+      const updater = window.Capacitor?.Plugins?.CapacitorUpdater;
+      if (updater && typeof updater.notifyAppReady === "function") {
+        await updater.notifyAppReady();
+        console.log("Capgo Live Updates: Versão web validada com sucesso no dispositivo nativo.");
+      }
+    } catch (err) {
+      console.warn("Capgo Live Updates:", err);
+    }
+  }
+}
 
 /* ==========================================================================
    EVENT WIRING
@@ -1050,8 +1065,38 @@ function renderBudgetBars() {
 }
 
 function renderCharts() {
-  drawDistributionChart(document.querySelector("#distribution-chart"));
-  drawTimelineChart(document.querySelector("#timeline-chart"));
+  try {
+    drawDistributionChart(document.querySelector("#distribution-chart"));
+  } catch (err) {
+    console.error("Erro ao desenhar Gráfico de Distribuição:", err);
+  }
+
+  try {
+    drawTimelineChart(document.querySelector("#timeline-chart"));
+  } catch (err) {
+    console.error("Erro ao desenhar Gráfico de Evolução:", err);
+  }
+}
+
+function drawRoundedRect(ctx, x, y, w, h, r = 4) {
+  if (typeof ctx.roundRect === "function") {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+    ctx.fill();
+  }
 }
 
 function setChartEmptyState(canvas, isEmpty, title, description) {
@@ -1084,6 +1129,26 @@ function setChartEmptyState(canvas, isEmpty, title, description) {
   }
 }
 
+function setupCanvas(canvas) {
+  if (!canvas) return null;
+  const dpr = window.devicePixelRatio || 1;
+  const parent = canvas.parentElement;
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(Math.floor(rect.width) || (parent ? parent.clientWidth : 0) || 300, 260);
+  const height = Number(canvas.getAttribute("height")) || 230;
+
+  canvas.width = Math.floor(width * dpr);
+  canvas.height = Math.floor(height * dpr);
+  canvas.style.width = "100%";
+  canvas.style.height = `${height}px`;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); // Reseta a matriz de transformação antes da escala para não acumular zoom
+  ctx.scale(dpr, dpr);
+  return { ctx, width, height };
+}
+
 function drawDistributionChart(canvas) {
   if (!canvas) return;
   const items = ["needs", "wants", "savings", "vr"].map((key) => ({
@@ -1101,7 +1166,9 @@ function drawDistributionChart(canvas) {
   );
   if (!total) return;
 
-  const { ctx, width, height } = setupCanvas(canvas);
+  const canvasSetup = setupCanvas(canvas);
+  if (!canvasSetup) return;
+  const { ctx, width, height } = canvasSetup;
   ctx.clearRect(0, 0, width, height);
 
   const isMobile = width < 420;
@@ -1129,10 +1196,10 @@ function drawDistributionChart(canvas) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#57534E";
-  ctx.font = "800 10px 'Plus Jakarta Sans', system-ui";
+  ctx.font = "800 10px 'Plus Jakarta Sans', system-ui, sans-serif";
   ctx.fillText("TOTAL GASTO", cx, cy - 8);
   ctx.fillStyle = "#070604";
-  ctx.font = "800 14px 'Plus Jakarta Sans', system-ui";
+  ctx.font = "800 14px 'Plus Jakarta Sans', system-ui, sans-serif";
   ctx.fillText(money(total), cx, cy + 10);
 
   // Legend List
@@ -1140,22 +1207,20 @@ function drawDistributionChart(canvas) {
     items.forEach((item, index) => {
       const col = index % 2;
       const row = Math.floor(index / 2);
-      const lx = col === 0 ? 20 : width * 0.52;
+      const lx = col === 0 ? 16 : width * 0.52;
       const ly = 160 + row * 28;
       const pct = total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
 
       ctx.fillStyle = colors[item.key];
-      ctx.beginPath();
-      ctx.roundRect(lx, ly - 8, 8, 8, 2);
-      ctx.fill();
+      drawRoundedRect(ctx, lx, ly - 8, 8, 8, 2);
 
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillStyle = "#070604";
-      ctx.font = "700 11px 'Plus Jakarta Sans', system-ui";
+      ctx.font = "700 11px 'Plus Jakarta Sans', system-ui, sans-serif";
       ctx.fillText(`${item.label} (${pct}%)`, lx + 14, ly - 8);
       ctx.fillStyle = "#57534E";
-      ctx.font = "600 10px 'Plus Jakarta Sans', system-ui";
+      ctx.font = "600 10px 'Plus Jakarta Sans', system-ui, sans-serif";
       ctx.fillText(money(item.value), lx + 14, ly + 6);
     });
   } else {
@@ -1166,16 +1231,14 @@ function drawDistributionChart(canvas) {
       const pct = total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
 
       ctx.fillStyle = colors[item.key];
-      ctx.beginPath();
-      ctx.roundRect(width * 0.60, y - 10, 10, 10, 3);
-      ctx.fill();
+      drawRoundedRect(ctx, width * 0.60, y - 10, 10, 10, 3);
 
       ctx.fillStyle = "#070604";
-      ctx.font = "800 12px 'Plus Jakarta Sans', system-ui";
+      ctx.font = "800 12px 'Plus Jakarta Sans', system-ui, sans-serif";
       ctx.fillText(`${item.label} (${pct}%)`, width * 0.60 + 16, y);
 
       ctx.fillStyle = "#57534E";
-      ctx.font = "600 11px 'Plus Jakarta Sans', system-ui";
+      ctx.font = "600 11px 'Plus Jakarta Sans', system-ui, sans-serif";
       ctx.fillText(money(item.value), width * 0.60 + 16, y + 16);
     });
   }
@@ -1195,12 +1258,14 @@ function drawTimelineChart(canvas) {
   );
   if (!expenses.length) return;
 
-  const { ctx, width, height } = setupCanvas(canvas);
+  const canvasSetup = setupCanvas(canvas);
+  if (!canvasSetup) return;
+  const { ctx, width, height } = canvasSetup;
   ctx.clearRect(0, 0, width, height);
 
   const padLeft = 40;
   const padRight = 30;
-  const padTop = 30;
+  const padTop = 35;
   const padBottom = 30;
   const chartWidth = width - padLeft - padRight;
   const chartHeight = height - padTop - padBottom;
@@ -1234,17 +1299,25 @@ function drawTimelineChart(canvas) {
   gradient.addColorStop(1, "rgba(253, 183, 45, 0.0)");
 
   ctx.beginPath();
-  points.forEach((point, index) => {
-    const x = padLeft + (index / Math.max(points.length - 1, 1)) * chartWidth;
-    const y = height - padBottom - (point.total / max) * chartHeight;
-    if (index === 0) {
-      ctx.moveTo(x, height - padBottom);
-      ctx.lineTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
-  });
-  ctx.lineTo(width - padRight, height - padBottom);
+  if (points.length === 1) {
+    const y = height - padBottom - (points[0].total / max) * chartHeight;
+    ctx.moveTo(padLeft, height - padBottom);
+    ctx.lineTo(padLeft, y);
+    ctx.lineTo(width - padRight, y);
+    ctx.lineTo(width - padRight, height - padBottom);
+  } else {
+    points.forEach((point, index) => {
+      const x = padLeft + (index / (points.length - 1)) * chartWidth;
+      const y = height - padBottom - (point.total / max) * chartHeight;
+      if (index === 0) {
+        ctx.moveTo(x, height - padBottom);
+        ctx.lineTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    ctx.lineTo(width - padRight, height - padBottom);
+  }
   ctx.closePath();
   ctx.fillStyle = gradient;
   ctx.fill();
@@ -1254,12 +1327,18 @@ function drawTimelineChart(canvas) {
   ctx.lineWidth = 3;
   ctx.lineJoin = "round";
   ctx.beginPath();
-  points.forEach((point, index) => {
-    const x = padLeft + (index / Math.max(points.length - 1, 1)) * chartWidth;
-    const y = height - padBottom - (point.total / max) * chartHeight;
-    if (index === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
+  if (points.length === 1) {
+    const y = height - padBottom - (points[0].total / max) * chartHeight;
+    ctx.moveTo(padLeft, y);
+    ctx.lineTo(width - padRight, y);
+  } else {
+    points.forEach((point, index) => {
+      const x = padLeft + (index / (points.length - 1)) * chartWidth;
+      const y = height - padBottom - (point.total / max) * chartHeight;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+  }
   ctx.stroke();
 
   // Draw Last Point Dot
@@ -1278,27 +1357,11 @@ function drawTimelineChart(canvas) {
   // Header stats
   ctx.textAlign = "left";
   ctx.fillStyle = "#57534E";
-  ctx.font = "700 12px 'Plus Jakarta Sans', system-ui";
+  ctx.font = "700 12px 'Plus Jakarta Sans', system-ui, sans-serif";
   ctx.fillText(`Acumulado final: `, padLeft, 18);
   ctx.fillStyle = "#070604";
-  ctx.font = "800 12px 'Plus Jakarta Sans', system-ui";
-  ctx.fillText(money(lastPoint.total), padLeft + 95, 18);
-}
-
-function setupCanvas(canvas) {
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  const width = Math.max(Math.floor(rect.width), 280);
-  const height = Number(canvas.getAttribute("height")) || 230;
-
-  canvas.width = width * dpr;
-  canvas.height = height * dpr;
-  canvas.style.width = "100%";
-  canvas.style.height = `${height}px`;
-
-  const ctx = canvas.getContext("2d");
-  ctx.scale(dpr, dpr);
-  return { ctx, width, height };
+  ctx.font = "800 12px 'Plus Jakarta Sans', system-ui, sans-serif";
+  ctx.fillText(money(lastPoint.total), padLeft + 105, 18);
 }
 
 function renderCategory(key) {
