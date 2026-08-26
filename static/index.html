@@ -13,9 +13,8 @@
     <link rel="icon" type="image/svg+xml" href="icon.svg">
     <link rel="apple-touch-icon" href="icon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=1.0.4">
     <script src="capacitor.js"></script>
   </head>
   <body>
@@ -476,23 +475,31 @@
             <label class="group-label">Destino do Orçamento</label>
             <div class="budget-chips-grid">
               <button type="button" class="budget-chip chip-needs active" data-budget="needs">
-                <span class="chip-dot"></span>
-                <span class="chip-title">50% Necessidades</span>
+                <div class="chip-header">
+                  <span class="chip-dot"></span>
+                  <span class="chip-title">50% Necessidades</span>
+                </div>
                 <span class="chip-sub">Essencial</span>
               </button>
               <button type="button" class="budget-chip chip-wants" data-budget="wants">
-                <span class="chip-dot"></span>
-                <span class="chip-title">30% Desejos</span>
+                <div class="chip-header">
+                  <span class="chip-dot"></span>
+                  <span class="chip-title">30% Desejos</span>
+                </div>
                 <span class="chip-sub">Estilo / Lazer</span>
               </button>
               <button type="button" class="budget-chip chip-savings" data-budget="savings">
-                <span class="chip-dot"></span>
-                <span class="chip-title">20% Reserva</span>
+                <div class="chip-header">
+                  <span class="chip-dot"></span>
+                  <span class="chip-title">20% Reserva</span>
+                </div>
                 <span class="chip-sub">Investimentos</span>
               </button>
               <button type="button" class="budget-chip chip-vr" data-budget="vr">
-                <span class="chip-dot"></span>
-                <span class="chip-title">Carteira VR</span>
+                <div class="chip-header">
+                  <span class="chip-dot"></span>
+                  <span class="chip-title">Carteira VR</span>
+                </div>
                 <span class="chip-sub">Alimentação</span>
               </button>
             </div>
@@ -629,7 +636,7 @@
     </div>
 
     <!-- SCRIPT DA APLICAÇÃO (FIREBASE INTEGRADO) -->
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app.js?v=1.0.4"></script>
   </body>
 </html>
 

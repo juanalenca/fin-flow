@@ -276,6 +276,16 @@ function wireEvents() {
     });
   }
 
+  // Fechamento ao clicar fora do card (no backdrop escuro)
+  [els.authDialog, els.entryDialog, els.confirmDialog, document.querySelector("#update-dialog")].forEach((dialog) => {
+    if (!dialog) return;
+    dialog.addEventListener("click", (e) => {
+      if (e.target === dialog) {
+        dialog.close();
+      }
+    });
+  });
+
   // Auth Mode Tabs
   document.querySelectorAll("[data-auth-mode]").forEach((btn) => {
     btn.addEventListener("click", () => setAuthMode(btn.dataset.authMode));
