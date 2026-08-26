@@ -1,7 +1,7 @@
 {
-  "version": "1.0.8",
-  "versionCode": 8,
+  "version": "1.0.9",
+  "versionCode": 9,
   "apkUrl": "https://github.com/juanalenca/fin-flow/releases/latest/download/FinFlow-Release-Signed.apk",
-  "notes": "Transição suave e natural entre menus, abas de navegação desktop e mobile, e animações fluidas de títulos e painéis.",
+  "notes": "Redesign de alto padrão dos cards de Pendências, Sobras e Fechamento do Mês: sem nesting, grid balanceado, badges semânticos e KPIs formatados.",
   "releasedAt": "2026-08-26"
 }

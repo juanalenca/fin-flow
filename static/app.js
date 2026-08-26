@@ -195,8 +195,8 @@ let unsubscribeTransfers = null;
    INITIALIZATION & AUTO-UPDATES
    ========================================================================== */
 
-const CURRENT_APP_VERSION = "1.0.8";
-const CURRENT_VERSION_CODE = 8;
+const CURRENT_APP_VERSION = "1.0.9";
+const CURRENT_VERSION_CODE = 9;
 
 function initApp() {
   initDOM();
@@ -1404,19 +1404,58 @@ function renderDynamicWorkspace() {
           .join("")}
       </div>`;
   } else {
+    const needsSpent = summary.budgets.needs.realized_cents || summary.budgets.needs.spent_cents;
+    const needsCeil = summary.budgets.needs.ceiling_cents;
+    const needsPct = Math.min(100, Math.round(summary.budgets.needs.usage_percent || 0));
+
+    const wantsSpent = summary.budgets.wants.realized_cents || summary.budgets.wants.spent_cents;
+    const wantsCeil = summary.budgets.wants.ceiling_cents;
+    const wantsPct = Math.min(100, Math.round(summary.budgets.wants.usage_percent || 0));
+
     noticesHtml = `
-      <div class="dynamic-empty-card healthy-empty">
-        <div class="dynamic-empty-icon-wrap">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+      <div class="status-showcase-box showcase-success">
+        <div class="showcase-header">
+          <div class="showcase-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+          </div>
+          <div class="showcase-title-wrap">
+            <h3 class="showcase-headline">Tetos orçamentários sob controle</h3>
+            <p class="showcase-text">Nenhuma ultrapassagem identificada neste período. Gastos de 50% e 30% estão em conformidade com a regra.</p>
+          </div>
         </div>
-        <div class="dynamic-empty-body">
-          <strong>Tetos Orçamentários Respeitados</strong>
-          <p>Nenhuma pendência neste período. Se algum gasto ultrapassar o limite de Necessidades (50%) ou Desejos (30%), a compensação aparecerá aqui.</p>
+        <div class="showcase-stats-grid">
+          <div class="showcase-stat-item">
+            <div class="showcase-stat-top">
+              <span class="showcase-stat-name"><span class="ledger-dot" style="background:var(--color-needs)"></span> Necessidades (50%)</span>
+              <span class="showcase-stat-pct">${needsPct}%</span>
+            </div>
+            <div class="showcase-stat-bar"><div class="showcase-stat-fill fill-needs" style="width:${needsPct}%"></div></div>
+            <div class="showcase-stat-values">
+              <span>Gasto: <strong>${money(needsSpent)}</strong></span>
+              <span>Teto: ${money(needsCeil)}</span>
+            </div>
+          </div>
+          <div class="showcase-stat-item">
+            <div class="showcase-stat-top">
+              <span class="showcase-stat-name"><span class="ledger-dot" style="background:var(--color-wants)"></span> Desejos (30%)</span>
+              <span class="showcase-stat-pct">${wantsPct}%</span>
+            </div>
+            <div class="showcase-stat-bar"><div class="showcase-stat-fill fill-wants" style="width:${wantsPct}%"></div></div>
+            <div class="showcase-stat-values">
+              <span>Gasto: <strong>${money(wantsSpent)}</strong></span>
+              <span>Teto: ${money(wantsCeil)}</span>
+            </div>
+          </div>
         </div>
       </div>`;
   }
 
   // 2. Sobras & Decisões de Saldo
+  const surplusNeeds = summary.budgets.needs.surplus_cents;
+  const surplusWants = summary.budgets.wants.surplus_cents;
+  const totalSurplus = surplusNeeds + surplusWants;
+  const investChange = summary.budgets.savings.investment_change_cents;
+
   let fundsHtml = "";
   if (pendingFunds.length) {
     fundsHtml = `
@@ -1447,25 +1486,41 @@ function renderDynamicWorkspace() {
       </div>`;
   } else if (isClosed && nextPendingFunds.length) {
     fundsHtml = `
-      <div class="dynamic-empty-card funds-empty">
-        <div class="dynamic-empty-icon-wrap" style="color: var(--color-savings)">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <div class="status-showcase-box showcase-info">
+        <div class="showcase-header">
+          <div class="showcase-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="showcase-title-wrap">
+            <h3 class="showcase-headline">Sobras geradas para a competência ${nextMonthKey}</h3>
+            <p class="showcase-text">Este mês foi consolidado e gerou <strong>${nextPendingFunds.length} saldo(s)</strong> prontos para direcionamento na próxima competência.</p>
+          </div>
         </div>
-        <div class="dynamic-empty-body">
-          <strong>Sobras Geradas para a Competência ${nextMonthKey}</strong>
-          <p>Este mês foi consolidado e gerou <strong>${nextPendingFunds.length} sobra(s)</strong> prontas para direcionamento no mês seguinte.</p>
-          <button class="btn btn-secondary btn-sm" style="margin-top: 8px;" type="button" data-nav-month="${nextMonthKey}">Ver Sobras em ${nextMonthKey} →</button>
+        <div class="showcase-highlight-row">
+          <button class="btn btn-primary btn-sm" type="button" data-nav-month="${nextMonthKey}">Ver Sobras em ${nextMonthKey} →</button>
         </div>
       </div>`;
   } else {
     fundsHtml = `
-      <div class="dynamic-empty-card funds-empty">
-        <div class="dynamic-empty-icon-wrap">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+      <div class="status-showcase-box showcase-info">
+        <div class="showcase-header">
+          <div class="showcase-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+          </div>
+          <div class="showcase-title-wrap">
+            <h3 class="showcase-headline">Nenhum saldo pendente de destinação</h3>
+            <p class="showcase-text">Ao encerrar a competência mensal, as economias e sobras apuradas ficarão disponíveis aqui para direcionamento a <strong>Objetivos</strong> ou <strong>Investimentos</strong>.</p>
+          </div>
         </div>
-        <div class="dynamic-empty-body">
-          <strong>Nenhum Saldo Pendente de Direcionamento</strong>
-          <p>Ao fechar o mês com saldo positivo em Necessidades ou Desejos, você poderá direcionar sobras para <strong>Objetivos</strong> ou <strong>Investimentos</strong>.</p>
+        <div class="showcase-highlight-row">
+          <div class="highlight-item">
+            <span class="highlight-label">Sobra projetada no mês</span>
+            <strong class="highlight-val text-gold">${money(totalSurplus)}</strong>
+          </div>
+          <div class="highlight-item">
+            <span class="highlight-label">Destino permitido</span>
+            <span class="highlight-sub">Objetivos ou Aportes (20%)</span>
+          </div>
         </div>
       </div>`;
   }
@@ -1481,51 +1536,56 @@ function renderDynamicWorkspace() {
     : "";
 
   // 3. Fechamento do Mês
-  let monthCloseHtml = "";
-  if (isClosed) {
-    monthCloseHtml = `
-      <article class="dynamic-panel dynamic-panel-wide">
-        <div class="month-close-bar">
-          <div class="month-close-info">
-            <div class="month-status-pill closed">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              <span>Competência ${monthKey} Fechada & Consolidada</span>
-            </div>
-            <p class="dynamic-desc" style="margin-top: 4px;">O troco de investimentos e as sobras foram devidamente transportados para a competência ${nextMonthKey}.</p>
+  let monthCloseHtml = `
+    <article class="dynamic-panel dynamic-panel-wide competence-control-panel">
+      <div class="competence-top-row">
+        <div class="competence-title-group">
+          <div class="competence-status-pill ${isClosed ? 'closed' : 'open'}">
+            ${isClosed 
+              ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> Competência ${monthKey} Fechada & Consolidada`
+              : `<span class="status-pulse-dot"></span> Competência ${monthKey} em Aberto`}
           </div>
-          <div class="month-close-actions">
-            <button class="btn btn-secondary btn-sm" type="button" data-nav-month="${nextMonthKey}">Ir para ${nextMonthKey} →</button>
-            <button class="btn btn-secondary btn-sm" type="button" id="reopen-month-btn">Reabrir Mês</button>
-          </div>
+          <p class="competence-subtitle">
+            ${isClosed 
+              ? `O troco de aportes e as sobras foram devidamente transportados para a competência ${nextMonthKey}.`
+              : `Lançamentos e ajustes em andamento. Feche o mês para consolidar sobras e troco de investimentos.`}
+          </p>
         </div>
-      </article>`;
-  } else {
-    const surplusNeeds = summary.budgets.needs.surplus_cents;
-    const surplusWants = summary.budgets.wants.surplus_cents;
-    const totalSurplus = surplusNeeds + surplusWants;
-    const investChange = summary.budgets.savings.investment_change_cents;
+        <div class="competence-actions-group">
+          ${isClosed 
+            ? `<button class="btn btn-primary" type="button" data-nav-month="${nextMonthKey}">Ir para ${nextMonthKey} →</button>
+               <button class="btn btn-secondary" type="button" id="reopen-month-btn">Reabrir Mês</button>`
+            : `<button class="btn btn-primary btn-close-month" type="button" id="close-month-btn">
+                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                 Fechar Mês ${monthKey}
+               </button>`}
+        </div>
+      </div>
 
-    monthCloseHtml = `
-      <article class="dynamic-panel dynamic-panel-wide">
-        <div class="month-close-bar">
-          <div class="month-close-info">
-            <div class="month-status-pill open">
-              <span class="status-pulse-dot"></span>
-              <span>Competência ${monthKey} em Aberto</span>
-            </div>
-            <p class="dynamic-desc" style="margin-top: 4px;">
-              Troco de Investimentos previsto: <strong>${money(investChange)}</strong> | Sobras previstas: <strong>${money(totalSurplus)}</strong>.
-            </p>
+      <div class="competence-kpi-grid">
+        <div class="competence-kpi-card">
+          <div class="kpi-icon-pill icon-blue">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           </div>
-          <div class="month-close-actions">
-            <button class="btn btn-primary" type="button" id="close-month-btn">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-              Fechar Mês ${monthKey}
-            </button>
+          <div class="kpi-content">
+            <span class="kpi-label">Troco de Investimentos (20% Protegido)</span>
+            <strong class="kpi-value text-savings">${money(investChange)}</strong>
+            <span class="kpi-hint">${isClosed ? 'Transportado para acumular em ' + nextMonthKey : 'Acumula automaticamente no teto de aportes de ' + nextMonthKey}</span>
           </div>
         </div>
-      </article>`;
-  }
+
+        <div class="competence-kpi-card">
+          <div class="kpi-icon-pill icon-gold">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+          </div>
+          <div class="kpi-content">
+            <span class="kpi-label">Sobras de Orçamento (Necessidades + Desejos)</span>
+            <strong class="kpi-value text-gold">${money(totalSurplus)}</strong>
+            <span class="kpi-hint">${isClosed ? 'Liberadas para destinação em ' + nextMonthKey : 'Prontas para direcionar a Metas ou Investimentos em ' + nextMonthKey}</span>
+          </div>
+        </div>
+      </div>
+    </article>`;
 
   els.dynamicWorkspace.innerHTML = `
     <article class="dynamic-panel dynamic-panel-wide">
@@ -1549,22 +1609,30 @@ function renderDynamicWorkspace() {
       </div>
     </article>
 
-    <article class="dynamic-panel">
+    <article class="dynamic-panel dynamic-panel-equal">
       <div class="dynamic-panel-head">
         <div>
           <h2 class="dynamic-title">Pendências e Compensações</h2>
-          <p class="dynamic-desc">Déficits requerem compensação entre Necessidades e Desejos.</p>
+          <p class="dynamic-desc">Compensação disciplinada entre Necessidades e Desejos.</p>
         </div>
+        <span class="panel-status-pill ${openDeficits.length ? "status-pill-danger" : "status-pill-success"}">
+          ${openDeficits.length 
+            ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> ${openDeficits.length} pendência(s)` 
+            : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> 0 pendências`}
+        </span>
       </div>
       ${noticesHtml}
     </article>
 
-    <article class="dynamic-panel">
+    <article class="dynamic-panel dynamic-panel-equal">
       <div class="dynamic-panel-head">
         <div>
           <h2 class="dynamic-title">Sobras & Decisões de Saldo</h2>
-          <p class="dynamic-desc">Redistribuição deliberada de economias para investimentos ou objetivos.</p>
+          <p class="dynamic-desc">Destinação deliberada de economias após fechamento.</p>
         </div>
+        <span class="panel-status-pill ${pendingFunds.length ? "status-pill-warning" : "status-pill-neutral"}">
+          ${pendingFunds.length ? `${pendingFunds.length} saldo(s)` : "Destinação"}
+        </span>
       </div>
       ${fundsHtml}
       ${recHtml}
