@@ -14,7 +14,7 @@
     <link rel="apple-touch-icon" href="icon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=1.0.5">
+    <link rel="stylesheet" href="styles.css?v=1.0.6">
     <script src="capacitor.js"></script>
   </head>
   <body>
@@ -217,13 +217,13 @@
             <form id="filters-form" class="filter-row-controls">
               <div class="date-range-inline">
                 <svg class="date-range-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                <input name="start" type="date" aria-label="Data inicial">
+                <input id="filter-start-date" name="start_date" type="date" aria-label="Data inicial">
                 <span class="date-sep">—</span>
-                <input name="end" type="date" aria-label="Data final">
+                <input id="filter-end-date" name="end_date" type="date" aria-label="Data final">
               </div>
               <div class="search-input-box">
                 <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>
-                <input name="search" placeholder="Buscar..." autocomplete="off">
+                <input id="filter-search" name="search" placeholder="Buscar..." autocomplete="off">
               </div>
             </form>
           </div>
@@ -273,7 +273,7 @@
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
                 </div>
               </div>
-              <strong class="metric-value" id="metric-vr">R$ 0,00</strong>
+              <strong class="metric-value" id="metric-vr-balance">R$ 0,00</strong>
               <span class="metric-foot">Disponível em vale-refeição</span>
             </div>
           </div>
@@ -693,6 +693,6 @@
     </div>
 
     <!-- SCRIPT DA APLICAÇÃO (FIREBASE INTEGRADO) -->
-    <script type="module" src="app.js?v=1.0.5"></script>
+    <script type="module" src="app.js?v=1.0.6"></script>
   </body>
 </html>

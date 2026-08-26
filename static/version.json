@@ -1,7 +1,7 @@
 {
-  "version": "1.0.5",
-  "versionCode": 5,
+  "version": "1.0.6",
+  "versionCode": 6,
   "apkUrl": "https://github.com/juanalenca/fin-flow/releases/latest/download/FinFlow-Release-Signed.apk",
-  "notes": "Evolução FinFlow: Gestão Dinâmica 50/30/20, Mapa de Objetivos Financeiros, Proteção dos Investimentos, Redistribuição de Sobras e Fechamento Mensal.",
+  "notes": "Correção de inicialização do DOM e listeners de eventos na interface web e mobile.",
   "releasedAt": "2026-08-26"
 }

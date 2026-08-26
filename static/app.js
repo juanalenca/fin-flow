@@ -104,76 +104,80 @@ const state = {
   activePreset: "current-month",
 };
 
-/* DOM Elements */
-const els = {
-  // Auth Widgets & Dialog
-  authUnloggedWidget: document.querySelector("#auth-unlogged-widget"),
-  authLoggedWidget: document.querySelector("#auth-logged-widget"),
-  openAuthBtn: document.querySelector("#open-auth-btn"),
-  mobileAuthTrigger: document.querySelector("#mobile-auth-trigger"),
-  mobileUserAvatar: document.querySelector("#mobile-user-avatar"),
-  googleAuthBtn: document.querySelector("#google-auth-btn"),
-  authDialog: document.querySelector("#auth-dialog"),
-  closeAuth: document.querySelector("#close-auth"),
-  authForm: document.querySelector("#auth-form"),
-  authModalTitle: document.querySelector("#auth-modal-title"),
-  authModalSubtitle: document.querySelector("#auth-modal-subtitle"),
-  authSubmitBtn: document.querySelector("#auth-submit-btn"),
-  authMessage: document.querySelector("#auth-message"),
-  nameField: document.querySelector("#name-field"),
-  logoutButton: document.querySelector("#logout-button"),
-  userDisplayName: document.querySelector("#user-display-name"),
-  userEmail: document.querySelector("#user-email"),
-  userAvatarInitials: document.querySelector("#user-avatar-initials"),
+/* DOM Elements Object */
+let els = {};
 
-  // Mobile Topbar Actions
-  mobileOpenEntry: document.querySelector("#mobile-open-entry"),
-  mobileViewTitle: document.querySelector("#mobile-view-title"),
-  mobileViewSubtitle: document.querySelector("#mobile-view-subtitle"),
+function initDOM() {
+  els = {
+    // Auth Widgets & Dialog
+    authUnloggedWidget: document.querySelector("#auth-unlogged-widget"),
+    authLoggedWidget: document.querySelector("#auth-logged-widget"),
+    openAuthBtn: document.querySelector("#open-auth-btn"),
+    mobileAuthTrigger: document.querySelector("#mobile-auth-trigger"),
+    mobileUserAvatar: document.querySelector("#mobile-user-avatar"),
+    googleAuthBtn: document.querySelector("#google-auth-btn"),
+    authDialog: document.querySelector("#auth-dialog"),
+    closeAuth: document.querySelector("#close-auth"),
+    authForm: document.querySelector("#auth-form"),
+    authModalTitle: document.querySelector("#auth-modal-title"),
+    authModalSubtitle: document.querySelector("#auth-modal-subtitle"),
+    authSubmitBtn: document.querySelector("#auth-submit-btn"),
+    authMessage: document.querySelector("#auth-message"),
+    nameField: document.querySelector("#name-field"),
+    logoutButton: document.querySelector("#logout-button"),
+    userDisplayName: document.querySelector("#user-display-name"),
+    userEmail: document.querySelector("#user-email"),
+    userAvatarInitials: document.querySelector("#user-avatar-initials"),
 
-  // Settings
-  toggleSettingsBtn: document.querySelector("#toggle-settings-btn"),
-  settingsForm: document.querySelector("#settings-form"),
-  settingsMessage: document.querySelector("#settings-message"),
-  toggleSettingsText: document.querySelector("#toggle-settings-text"),
-  toggleSettingsIcon: document.querySelector("#toggle-settings-icon"),
+    // Mobile Topbar Actions
+    mobileOpenEntry: document.querySelector("#mobile-open-entry"),
+    mobileViewTitle: document.querySelector("#mobile-view-title"),
+    mobileViewSubtitle: document.querySelector("#mobile-view-subtitle"),
 
-  // Dynamic Workspace & Goals
-  dynamicWorkspace: document.querySelector("#dynamic-workspace"),
-  goalsView: document.querySelector("#goals-view"),
-  goalsList: document.querySelector("#goals-list"),
-  goalsForm: document.querySelector("#goal-form"),
+    // Settings
+    toggleSettingsBtn: document.querySelector("#toggle-settings-btn"),
+    settingsForm: document.querySelector("#settings-form"),
+    settingsMessage: document.querySelector("#settings-message"),
+    toggleSettingsText: document.querySelector("#toggle-settings-text"),
+    toggleSettingsIcon: document.querySelector("#toggle-settings-icon"),
 
-  // Filters
-  filtersForm: document.querySelector("#filters-form"),
-  presetButtons: document.querySelectorAll("[data-preset]"),
+    // Dynamic Workspace & Goals
+    dynamicWorkspace: document.querySelector("#dynamic-workspace"),
+    goalsView: document.querySelector("#goals-view"),
+    goalsList: document.querySelector("#goals-list"),
+    goalsForm: document.querySelector("#goal-form"),
 
-  // Entry Dialog (Redesigned)
-  entryDialog: document.querySelector("#entry-dialog"),
-  entryForm: document.querySelector("#entry-form"),
-  entryDialogTitle: document.querySelector("#entry-dialog-title"),
-  entryMessage: document.querySelector("#entry-message"),
-  deleteEntry: document.querySelector("#delete-entry"),
-  entryValueInput: document.querySelector("#entry-value"),
-  hiddenBudgetType: document.querySelector("#hidden-budget-type"),
-  hiddenEntryKind: document.querySelector("#hidden-entry-kind"),
-  budgetChips: document.querySelectorAll(".budget-chip"),
-  vrKindWrapper: document.querySelector("#vr-kind-toggle-wrapper"),
-  vrSegmentBtns: document.querySelectorAll(".segmented-movement .segment-btn"),
-  categoryInput: document.querySelector("#entry-category"),
-  catPills: document.querySelectorAll(".cat-pill"),
+    // Filters
+    filtersForm: document.querySelector("#filters-form"),
+    presetButtons: document.querySelectorAll("[data-preset]"),
 
-  // Confirm Dialog
-  confirmDialog: document.querySelector("#confirm-dialog"),
-  confirmTitle: document.querySelector("#confirm-title"),
-  confirmDesc: document.querySelector("#confirm-desc"),
-  confirmOk: document.querySelector("#confirm-ok"),
-  confirmCancel: document.querySelector("#confirm-cancel"),
+    // Entry Dialog
+    entryDialog: document.querySelector("#entry-dialog"),
+    entryForm: document.querySelector("#entry-form"),
+    entryDialogTitle: document.querySelector("#entry-dialog-title"),
+    entryMessage: document.querySelector("#entry-message"),
+    deleteEntry: document.querySelector("#delete-entry"),
+    entryValueInput: document.querySelector("#entry-value"),
+    hiddenBudgetType: document.querySelector("#hidden-budget-type"),
+    hiddenEntryKind: document.querySelector("#hidden-entry-kind"),
+    budgetChips: document.querySelectorAll(".budget-chip"),
+    vrKindWrapper: document.querySelector("#vr-kind-toggle-wrapper"),
+    vrSegmentBtns: document.querySelectorAll(".segmented-movement .segment-btn"),
+    categoryInput: document.querySelector("#entry-category"),
+    catPills: document.querySelectorAll(".cat-pill"),
 
-  // Toast
-  toast: document.querySelector("#toast"),
-  toastText: document.querySelector("#toast-text"),
-};
+    // Confirm Dialog
+    confirmDialog: document.querySelector("#confirm-dialog"),
+    confirmTitle: document.querySelector("#confirm-title"),
+    confirmDesc: document.querySelector("#confirm-desc"),
+    confirmOk: document.querySelector("#confirm-ok"),
+    confirmCancel: document.querySelector("#confirm-cancel"),
+
+    // Toast
+    toast: document.querySelector("#toast"),
+    toastText: document.querySelector("#toast-text"),
+  };
+}
 
 let authMode = "login";
 let searchDebounceTimer = null;
@@ -191,15 +195,22 @@ let unsubscribeTransfers = null;
    INITIALIZATION & AUTO-UPDATES
    ========================================================================== */
 
-const CURRENT_APP_VERSION = "1.0.5";
-const CURRENT_VERSION_CODE = 5;
+const CURRENT_APP_VERSION = "1.0.6";
+const CURRENT_VERSION_CODE = 6;
 
-document.addEventListener("DOMContentLoaded", () => {
+function initApp() {
+  initDOM();
   initLiveUpdates();
   setupEventListeners();
   setupCurrencyMasks();
   initAuthObserver();
-});
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApp);
+} else {
+  initApp();
+}
 
 async function initLiveUpdates() {
   if (!window.Capacitor?.isNativePlatform()) return;
@@ -261,21 +272,33 @@ function setupEventListeners() {
     els.toggleSettingsBtn.addEventListener("click", () => {
       const isHidden = els.settingsForm.hidden;
       els.settingsForm.hidden = !isHidden;
-      els.toggleSettingsText.textContent = isHidden ? "Ocultar Bases" : "Ajustar Bases";
-      els.toggleSettingsIcon.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
+      if (els.toggleSettingsText) els.toggleSettingsText.textContent = isHidden ? "Ocultar Bases" : "Ajustar Bases";
+      if (els.toggleSettingsIcon) els.toggleSettingsIcon.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
     });
   }
 
-  els.settingsForm.addEventListener("submit", handleSettingsSubmit);
+  if (els.settingsForm) {
+    els.settingsForm.addEventListener("submit", handleSettingsSubmit);
+  }
 
   // Filters Events
-  els.filtersForm.addEventListener("submit", (e) => e.preventDefault());
-  els.presetButtons.forEach((btn) => {
-    btn.addEventListener("click", () => handlePresetChange(btn.dataset.preset));
-  });
-  els.filtersForm.start_date.addEventListener("change", handleCustomDateChange);
-  els.filtersForm.end_date.addEventListener("change", handleCustomDateChange);
-  els.filtersForm.search.addEventListener("input", handleSearchInput);
+  if (els.filtersForm) {
+    els.filtersForm.addEventListener("submit", (e) => e.preventDefault());
+    
+    const startInput = els.filtersForm.querySelector('input[name="start_date"], input[name="start"]');
+    const endInput = els.filtersForm.querySelector('input[name="end_date"], input[name="end"]');
+    const searchInput = els.filtersForm.querySelector('input[name="search"]');
+
+    if (startInput) startInput.addEventListener("change", handleCustomDateChange);
+    if (endInput) endInput.addEventListener("change", handleCustomDateChange);
+    if (searchInput) searchInput.addEventListener("input", handleSearchInput);
+  }
+
+  if (els.presetButtons) {
+    els.presetButtons.forEach((btn) => {
+      btn.addEventListener("click", () => handlePresetChange(btn.dataset.preset));
+    });
+  }
 
   // Auth Triggers
   if (els.openAuthBtn) els.openAuthBtn.addEventListener("click", () => openAuthDialog());
@@ -288,7 +311,7 @@ function setupEventListeners() {
       }
     });
   }
-  if (els.closeAuth) els.closeAuth.addEventListener("click", () => els.authDialog.close());
+  if (els.closeAuth) els.closeAuth.addEventListener("click", () => els.authDialog?.close());
 
   // Google Login
   if (els.googleAuthBtn) els.googleAuthBtn.addEventListener("click", handleGoogleAuth);
@@ -316,7 +339,7 @@ function setupEventListeners() {
     btn.addEventListener("click", () => setAuthMode(btn.dataset.authMode));
   });
 
-  els.authForm.addEventListener("submit", handleAuthSubmit);
+  if (els.authForm) els.authForm.addEventListener("submit", handleAuthSubmit);
   if (els.logoutButton) els.logoutButton.addEventListener("click", handleLogout);
 
   // Views Navigation (Desktop & Mobile)
@@ -337,38 +360,48 @@ function setupEventListeners() {
   const mobileDockNewBtn = document.querySelector("#mobile-dock-new-btn");
   if (mobileDockNewBtn) mobileDockNewBtn.addEventListener("click", triggerEntry);
 
-  document.querySelector("#close-entry")?.addEventListener("click", () => els.entryDialog.close());
-  document.querySelector("#cancel-entry")?.addEventListener("click", () => els.entryDialog.close());
-  els.entryForm.addEventListener("submit", handleEntrySubmit);
-  els.deleteEntry.addEventListener("click", handleEntryDelete);
+  document.querySelector("#close-entry")?.addEventListener("click", () => els.entryDialog?.close());
+  document.querySelector("#cancel-entry")?.addEventListener("click", () => els.entryDialog?.close());
+  if (els.entryForm) els.entryForm.addEventListener("submit", handleEntrySubmit);
+  if (els.deleteEntry) els.deleteEntry.addEventListener("click", handleEntryDelete);
 
   // Budget Chips Selection
-  els.budgetChips.forEach((chip) => {
-    chip.addEventListener("click", () => setEntryBudget(chip.dataset.budget));
-  });
+  if (els.budgetChips) {
+    els.budgetChips.forEach((chip) => {
+      chip.addEventListener("click", () => setEntryBudget(chip.dataset.budget));
+    });
+  }
 
   // VR Movement Kind Toggle
-  els.vrSegmentBtns.forEach((btn) => {
-    btn.addEventListener("click", () => setEntryKind(btn.dataset.kind));
-  });
+  if (els.vrSegmentBtns) {
+    els.vrSegmentBtns.forEach((btn) => {
+      btn.addEventListener("click", () => setEntryKind(btn.dataset.kind));
+    });
+  }
 
   // Quick Category Pills
-  els.catPills.forEach((pill) => {
-    pill.addEventListener("click", () => {
-      els.categoryInput.value = pill.dataset.cat;
-      els.catPills.forEach((p) => p.classList.toggle("active", p === pill));
+  if (els.catPills) {
+    els.catPills.forEach((pill) => {
+      pill.addEventListener("click", () => {
+        if (els.categoryInput) els.categoryInput.value = pill.dataset.cat;
+        els.catPills.forEach((p) => p.classList.toggle("active", p === pill));
+      });
     });
-  });
+  }
 
   // Confirm Modal
-  els.confirmOk.addEventListener("click", () => {
-    els.confirmDialog.close();
-    if (confirmResolve) confirmResolve(true);
-  });
-  els.confirmCancel.addEventListener("click", () => {
-    els.confirmDialog.close();
-    if (confirmResolve) confirmResolve(false);
-  });
+  if (els.confirmOk) {
+    els.confirmOk.addEventListener("click", () => {
+      els.confirmDialog?.close();
+      if (confirmResolve) confirmResolve(true);
+    });
+  }
+  if (els.confirmCancel) {
+    els.confirmCancel.addEventListener("click", () => {
+      els.confirmDialog?.close();
+      if (confirmResolve) confirmResolve(false);
+    });
+  }
 
   // Resize listener for charts
   window.addEventListener("resize", () => {
@@ -384,7 +417,7 @@ function setupEventListeners() {
 
 function openAuthDialog(mode = "login") {
   setAuthMode(mode);
-  els.authDialog.showModal();
+  els.authDialog?.showModal();
 }
 
 function setAuthMode(mode) {
@@ -394,15 +427,15 @@ function setAuthMode(mode) {
   });
 
   if (mode === "register") {
-    els.authModalTitle.textContent = "Crie sua conta";
-    els.authModalSubtitle.textContent = "Comece sua jornada de gestão financeira inteligente";
-    els.authSubmitBtn.querySelector("span").textContent = "Criar conta";
-    els.nameField.hidden = false;
+    if (els.authModalTitle) els.authModalTitle.textContent = "Crie sua conta";
+    if (els.authModalSubtitle) els.authModalSubtitle.textContent = "Comece sua jornada de gestão financeira inteligente";
+    if (els.authSubmitBtn) els.authSubmitBtn.querySelector("span").textContent = "Criar conta";
+    if (els.nameField) els.nameField.hidden = false;
   } else {
-    els.authModalTitle.textContent = "Acesse sua conta";
-    els.authModalSubtitle.textContent = "Sincronize seus dados com segurança na nuvem";
-    els.authSubmitBtn.querySelector("span").textContent = "Entrar no FinFlow";
-    els.nameField.hidden = true;
+    if (els.authModalTitle) els.authModalTitle.textContent = "Acesse sua conta";
+    if (els.authModalSubtitle) els.authModalSubtitle.textContent = "Sincronize seus dados com segurança na nuvem";
+    if (els.authSubmitBtn) els.authSubmitBtn.querySelector("span").textContent = "Entrar no FinFlow";
+    if (els.nameField) els.nameField.hidden = true;
   }
   hideAlert(els.authMessage);
 }
@@ -423,21 +456,21 @@ function initAuthObserver() {
 
 function renderUserWidget(user) {
   if (user) {
-    els.authUnloggedWidget.hidden = true;
-    els.authLoggedWidget.hidden = false;
-    els.userDisplayName.textContent = user.displayName || user.email.split("@")[0];
-    els.userEmail.textContent = user.email;
+    if (els.authUnloggedWidget) els.authUnloggedWidget.hidden = true;
+    if (els.authLoggedWidget) els.authLoggedWidget.hidden = false;
+    if (els.userDisplayName) els.userDisplayName.textContent = user.displayName || user.email.split("@")[0];
+    if (els.userEmail) els.userEmail.textContent = user.email;
 
     const initial = (user.displayName || user.email)[0].toUpperCase();
-    els.userAvatarInitials.textContent = initial;
+    if (els.userAvatarInitials) els.userAvatarInitials.textContent = initial;
 
     if (els.mobileUserAvatar) {
       els.mobileUserAvatar.textContent = initial;
       els.mobileUserAvatar.classList.remove("avatar-guest");
     }
   } else {
-    els.authUnloggedWidget.hidden = false;
-    els.authLoggedWidget.hidden = true;
+    if (els.authUnloggedWidget) els.authUnloggedWidget.hidden = false;
+    if (els.authLoggedWidget) els.authLoggedWidget.hidden = true;
     if (els.mobileUserAvatar) {
       els.mobileUserAvatar.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
       els.mobileUserAvatar.classList.add("avatar-guest");
@@ -457,12 +490,12 @@ async function handleGoogleAuth() {
           const credential = GoogleAuthProvider.credential(idToken);
           await signInWithCredential(auth, credential);
           showToast(`Conectado como ${auth.currentUser.displayName || auth.currentUser.email}!`);
-          els.authDialog.close();
+          els.authDialog?.close();
           return;
         }
         if (result.user) {
           showToast(`Conectado como ${result.user.displayName || result.user.email}!`);
-          els.authDialog.close();
+          els.authDialog?.close();
           return;
         }
       }
@@ -471,7 +504,7 @@ async function handleGoogleAuth() {
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
     showToast(`Bem-vindo(a), ${user.displayName || user.email}!`);
-    els.authDialog.close();
+    els.authDialog?.close();
   } catch (error) {
     console.error("Google Auth Error:", error);
     if (
@@ -485,7 +518,7 @@ async function handleGoogleAuth() {
     }
     let msg = "Erro ao autenticar com o Google.";
     if (error.code === "auth/unauthorized-domain") {
-      msg = "Domínio não autorizado pelo Firebase. Utilize login por E-mail e Senha ou acesse mapeamento-esportivo.web.app.";
+      msg = "Domínio não autorizado pelo Firebase. Utilize login por E-mail e Senha ou adicione fin-flow-app.web.app nos domínios autorizados.";
     } else if (error.code === "auth/operation-not-allowed") {
       msg = "O login com o Google precisa ser ativado no Firebase Console (Authentication > Sign-in method).";
     } else if (error.message) {
@@ -500,13 +533,13 @@ async function handleAuthSubmit(event) {
   hideAlert(els.authMessage);
 
   const btn = els.authSubmitBtn;
-  const btnSpan = btn.querySelector("span");
-  const origText = btnSpan.textContent;
-  btnSpan.textContent = "Processando...";
-  btn.disabled = true;
+  const btnSpan = btn?.querySelector("span");
+  const origText = btnSpan?.textContent || "Entrar";
+  if (btnSpan) btnSpan.textContent = "Processando...";
+  if (btn) btn.disabled = true;
 
   const data = Object.fromEntries(new FormData(els.authForm));
-  const email = data.email.trim();
+  const email = (data.email || "").trim();
   const password = data.password;
 
   try {
@@ -520,8 +553,8 @@ async function handleAuthSubmit(event) {
       await signInWithEmailAndPassword(auth, email, password);
       showToast("Sessão iniciada com sucesso!");
     }
-    els.authForm.reset();
-    els.authDialog.close();
+    els.authForm?.reset();
+    els.authDialog?.close();
   } catch (err) {
     console.error(err);
     let msg = "Erro ao processar autenticação.";
@@ -536,8 +569,8 @@ async function handleAuthSubmit(event) {
     }
     showAlert(els.authMessage, msg);
   } finally {
-    btnSpan.textContent = origText;
-    btn.disabled = false;
+    if (btnSpan) btnSpan.textContent = origText;
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -682,9 +715,9 @@ async function handleSettingsSubmit(event) {
       showToast("Bases salvas localmente!");
     }
 
-    els.settingsForm.hidden = true;
-    els.toggleSettingsText.textContent = "Ajustar Bases";
-    els.toggleSettingsIcon.style.transform = "rotate(0deg)";
+    if (els.settingsForm) els.settingsForm.hidden = true;
+    if (els.toggleSettingsText) els.toggleSettingsText.textContent = "Ajustar Bases";
+    if (els.toggleSettingsIcon) els.toggleSettingsIcon.style.transform = "rotate(0deg)";
   } catch (err) {
     console.error(err);
     showAlert(els.settingsMessage, err.message || "Erro ao salvar configurações.");
@@ -697,53 +730,57 @@ async function handleSettingsSubmit(event) {
 
 function openEntryDialog(entry = null) {
   hideAlert(els.entryMessage);
-  els.entryForm.reset();
+  if (els.entryForm) els.entryForm.reset();
 
   if (entry) {
-    els.entryDialogTitle.textContent = "Editar Lançamento";
-    els.entryForm.id.value = entry.id;
-    els.entryValueInput.value = formatInputMoney(entry.value_cents);
-    els.entryForm.description.value = entry.description;
-    els.entryForm.category.value = entry.category;
-    els.entryForm.date.value = entry.date;
-    els.entryForm.payment_method.value = entry.payment_method;
-    els.entryForm.note.value = entry.note || "";
+    if (els.entryDialogTitle) els.entryDialogTitle.textContent = "Editar Lançamento";
+    if (els.entryForm?.id) els.entryForm.id.value = entry.id;
+    if (els.entryValueInput) els.entryValueInput.value = formatInputMoney(entry.value_cents);
+    if (els.entryForm?.description) els.entryForm.description.value = entry.description;
+    if (els.entryForm?.category) els.entryForm.category.value = entry.category;
+    if (els.entryForm?.date) els.entryForm.date.value = entry.date;
+    if (els.entryForm?.payment_method) els.entryForm.payment_method.value = entry.payment_method;
+    if (els.entryForm?.note) els.entryForm.note.value = entry.note || "";
     setEntryBudget(entry.budget_type);
     setEntryKind(entry.entry_kind || "expense");
-    els.deleteEntry.hidden = false;
+    if (els.deleteEntry) els.deleteEntry.hidden = false;
   } else {
-    els.entryDialogTitle.textContent = "Novo Lançamento";
-    els.entryForm.id.value = "";
-    els.entryValueInput.value = "";
-    els.entryForm.date.value = toDateInput(new Date());
+    if (els.entryDialogTitle) els.entryDialogTitle.textContent = "Novo Lançamento";
+    if (els.entryForm?.id) els.entryForm.id.value = "";
+    if (els.entryValueInput) els.entryValueInput.value = "";
+    if (els.entryForm?.date) els.entryForm.date.value = toDateInput(new Date());
     setEntryBudget("needs");
     setEntryKind("expense");
-    els.deleteEntry.hidden = true;
+    if (els.deleteEntry) els.deleteEntry.hidden = true;
   }
 
-  els.catPills.forEach((p) => p.classList.remove("active"));
-  els.entryDialog.showModal();
+  if (els.catPills) els.catPills.forEach((p) => p.classList.remove("active"));
+  els.entryDialog?.showModal();
 }
 
 function setEntryBudget(budget) {
-  els.hiddenBudgetType.value = budget;
-  els.budgetChips.forEach((chip) => {
-    chip.classList.toggle("active", chip.dataset.budget === budget);
-  });
+  if (els.hiddenBudgetType) els.hiddenBudgetType.value = budget;
+  if (els.budgetChips) {
+    els.budgetChips.forEach((chip) => {
+      chip.classList.toggle("active", chip.dataset.budget === budget);
+    });
+  }
 
   if (budget === "vr") {
-    els.vrKindWrapper.hidden = false;
+    if (els.vrKindWrapper) els.vrKindWrapper.hidden = false;
   } else {
-    els.vrKindWrapper.hidden = true;
+    if (els.vrKindWrapper) els.vrKindWrapper.hidden = true;
     setEntryKind("expense");
   }
 }
 
 function setEntryKind(kind) {
-  els.hiddenEntryKind.value = kind;
-  els.vrSegmentBtns.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.kind === kind);
-  });
+  if (els.hiddenEntryKind) els.hiddenEntryKind.value = kind;
+  if (els.vrSegmentBtns) {
+    els.vrSegmentBtns.forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.kind === kind);
+    });
+  }
 }
 
 async function handleEntrySubmit(event) {
@@ -753,7 +790,7 @@ async function handleEntrySubmit(event) {
   const data = Object.fromEntries(new FormData(els.entryForm));
 
   try {
-    const rawVal = data.value || els.entryValueInput.value;
+    const rawVal = data.value || els.entryValueInput?.value;
     const value_cents = parseMoney(rawVal);
     if (!value_cents || value_cents <= 0) {
       throw new Error("Informe um valor maior que zero.");
@@ -767,8 +804,8 @@ async function handleEntrySubmit(event) {
     const category = (data.category || "").trim() || "Geral";
     const payment_method = (data.payment_method || "").trim() || "Outros";
     const date = data.date || toDateInput(new Date());
-    const budget_type = els.hiddenBudgetType.value || "needs";
-    const entry_kind = els.hiddenEntryKind.value || "expense";
+    const budget_type = els.hiddenBudgetType?.value || "needs";
+    const entry_kind = els.hiddenEntryKind?.value || "expense";
     const note = (data.note || "").trim();
 
     const isEdit = Boolean(data.id);
@@ -833,7 +870,7 @@ async function handleEntrySubmit(event) {
     }
 
     await syncDeficitsForMonth(monthKeyFromDate(date));
-    els.entryDialog.close();
+    els.entryDialog?.close();
   } catch (error) {
     console.error("Erro ao salvar lançamento:", error);
     showAlert(els.entryMessage, error.message);
@@ -842,7 +879,7 @@ async function handleEntrySubmit(event) {
 }
 
 async function handleEntryDelete() {
-  const id = els.entryForm.id.value;
+  const id = els.entryForm?.id?.value;
   if (!id) return;
 
   const confirmed = await showConfirm("Deseja excluir este lançamento?", "Esta movimentação será apagada e os cálculos atualizados.");
@@ -863,7 +900,7 @@ async function handleEntryDelete() {
     }
 
     await syncDeficitsForMonth(monthKey);
-    els.entryDialog.close();
+    els.entryDialog?.close();
   } catch (err) {
     console.error(err);
     showAlert(els.entryMessage, "Erro ao excluir transação.");
@@ -1185,6 +1222,8 @@ function statusLabel(status) {
 
 async function handleGoalSubmit(event) {
   event.preventDefault();
+  if (!els.goalsForm) return;
+
   const form = new FormData(els.goalsForm);
   const name = String(form.get("name") || "").trim();
   const target_cents = parseMoney(form.get("target"));
@@ -1483,10 +1522,10 @@ function render() {
   if (!state.summary) recalculateSummary();
 
   // Sync settings inputs
-  els.settingsForm.monthly_income.value = formatInputMoney(state.settings.monthly_income_cents);
-  els.settingsForm.vr_initial.value = formatInputMoney(state.settings.vr_initial_balance_cents);
-  if (els.settingsForm.needs_goal) els.settingsForm.needs_goal.value = formatInputMoney(state.settings.budget_goals_cents?.needs || 0);
-  if (els.settingsForm.wants_goal) els.settingsForm.wants_goal.value = formatInputMoney(state.settings.budget_goals_cents?.wants || 0);
+  if (els.settingsForm?.monthly_income) els.settingsForm.monthly_income.value = formatInputMoney(state.settings.monthly_income_cents);
+  if (els.settingsForm?.vr_initial) els.settingsForm.vr_initial.value = formatInputMoney(state.settings.vr_initial_balance_cents);
+  if (els.settingsForm?.needs_goal) els.settingsForm.needs_goal.value = formatInputMoney(state.settings.budget_goals_cents?.needs || 0);
+  if (els.settingsForm?.wants_goal) els.settingsForm.wants_goal.value = formatInputMoney(state.settings.budget_goals_cents?.wants || 0);
 
   renderMetrics();
   renderBudgetBars();
@@ -1568,13 +1607,16 @@ function renderMetrics() {
   text("#metric-income", money(s.income_cents));
   text("#metric-spent", money(s.spent_total_cents));
 
+  const pct = s.income_cents > 0 ? (s.spent_total_cents / s.income_cents) * 100 : 0;
+  text("#metric-spent-pct", `${pct.toFixed(1)}% da renda comprometida`);
+
   const availEl = document.querySelector("#metric-available");
   if (availEl) {
     availEl.textContent = money(s.available_cents);
     availEl.className = `metric-value ${s.available_cents >= 0 ? "text-available" : "text-spent"}`;
   }
 
-  const vrEl = document.querySelector("#metric-vr-balance");
+  const vrEl = document.querySelector("#metric-vr-balance") || document.querySelector("#metric-vr");
   if (vrEl) {
     vrEl.textContent = money(s.vr.balance_cents);
     vrEl.className = `metric-value ${s.vr.balance_cents >= 0 ? "text-available" : "text-spent"}`;
@@ -1582,18 +1624,40 @@ function renderMetrics() {
 }
 
 function renderBudgetBars() {
-  BUDGET_KEYS.forEach((key) => {
-    const budget = state.summary.budgets[key];
-    text(`#bar-${key}-values`, `${money(budget.spent_cents)} / ${money(budget.planned_cents)}`);
-    text(`#bar-${key}-pct`, `${budget.usage_percent.toFixed(1)}%`);
+  const container = document.querySelector("#budget-bars");
+  if (!container) return;
 
-    const fillEl = document.querySelector(`#fill-${key}`);
-    if (fillEl) {
-      const widthPct = Math.min(budget.usage_percent, 100);
-      fillEl.style.width = `${widthPct}%`;
-      fillEl.classList.toggle("status-over", budget.usage_percent > 100);
-    }
-  });
+  const barKeys = [
+    { key: "needs", label: "50% Necessidades", color: colors.needs },
+    { key: "wants", label: "30% Desejos", color: colors.wants },
+    { key: "savings", label: "20% Investimentos", color: colors.savings },
+  ];
+
+  container.innerHTML = barKeys
+    .map(({ key, label, color }) => {
+      const budget = state.summary.budgets[key] || { planned_cents: 0, spent_cents: 0, usage_percent: 0 };
+      const pct = Math.min(budget.usage_percent, 100);
+      const isOver = budget.usage_percent > 100;
+      return `
+        <div class="budget-bar-item">
+          <div class="budget-bar-header">
+            <div class="budget-bar-label-group">
+              <span class="budget-dot" style="background-color: ${color}"></span>
+              <strong class="budget-name">${label}</strong>
+            </div>
+            <div class="budget-bar-values">
+              <span class="budget-spent-val">${money(budget.spent_cents)}</span>
+              <span class="budget-sep">/</span>
+              <span class="budget-planned-val">${money(budget.planned_cents)}</span>
+              <span class="budget-pct-badge ${isOver ? "badge-over" : ""}">${budget.usage_percent.toFixed(1)}%</span>
+            </div>
+          </div>
+          <div class="budget-progress-track">
+            <div class="budget-progress-bar" style="width: ${pct}%; background-color: ${color};"></div>
+          </div>
+        </div>`;
+    })
+    .join("");
 }
 
 /* ==========================================================================
@@ -1792,9 +1856,11 @@ function renderCategory(key) {
   const listEl = document.querySelector("#category-list");
   const titleEl = document.querySelector("#category-list-title");
 
-  summaryEl.innerHTML = "";
-  listEl.innerHTML = "";
+  if (summaryEl) summaryEl.innerHTML = "";
+  if (listEl) listEl.innerHTML = "";
   if (titleEl) titleEl.textContent = `Lançamentos de ${labels[key] || key}`;
+
+  if (!summaryEl || !listEl) return;
 
   if (key === "vr") {
     const vr = state.summary.vr;
@@ -1828,7 +1894,7 @@ function renderCategory(key) {
 
 function renderEntries() {
   const listEl = document.querySelector("#entries-list");
-  renderEntryList(listEl, state.filteredEntries);
+  if (listEl) renderEntryList(listEl, state.filteredEntries);
 
   const total = state.filteredEntries
     .filter((entry) => entry.entry_kind === "expense")
@@ -1837,6 +1903,7 @@ function renderEntries() {
 }
 
 function renderEntryList(container, entries) {
+  if (!container) return;
   container.innerHTML = "";
   if (!entries || !entries.length) {
     container.innerHTML = `
@@ -2027,21 +2094,22 @@ function hideAlert(target) {
 
 function showToast(message, duration = 3000) {
   if (!els.toast) return;
-  els.toastText.textContent = message;
+  if (els.toastText) els.toastText.textContent = message;
   els.toast.hidden = false;
 
   clearTimeout(toastTimeout);
   clearTimeout(toastFadeTimeout);
 
   toastTimeout = setTimeout(() => {
-    els.toast.hidden = true;
+    if (els.toast) els.toast.hidden = true;
   }, duration);
 }
 
 function showConfirm(title, description, okText = "Confirmar") {
-  els.confirmTitle.textContent = title;
-  els.confirmDesc.textContent = description;
-  els.confirmOk.textContent = okText;
+  if (!els.confirmDialog) return Promise.resolve(true);
+  if (els.confirmTitle) els.confirmTitle.textContent = title;
+  if (els.confirmDesc) els.confirmDesc.textContent = description;
+  if (els.confirmOk) els.confirmOk.textContent = okText;
   els.confirmDialog.showModal();
 
   return new Promise((resolve) => {
@@ -2106,16 +2174,24 @@ function handlePresetChange(preset) {
   state.filters.startDate = start ? toDateInput(start) : "";
   state.filters.endDate = end ? toDateInput(end) : "";
 
-  els.filtersForm.start_date.value = state.filters.startDate;
-  els.filtersForm.end_date.value = state.filters.endDate;
+  if (els.filtersForm) {
+    const startInput = els.filtersForm.querySelector('input[name="start_date"], input[name="start"]');
+    const endInput = els.filtersForm.querySelector('input[name="end_date"], input[name="end"]');
+    if (startInput) startInput.value = state.filters.startDate;
+    if (endInput) endInput.value = state.filters.endDate;
+  }
 
   updatePresetButtonsUI();
   recalculateAndRender();
 }
 
 function handleCustomDateChange() {
-  state.filters.startDate = els.filtersForm.start_date.value;
-  state.filters.endDate = els.filtersForm.end_date.value;
+  if (els.filtersForm) {
+    const startInput = els.filtersForm.querySelector('input[name="start_date"], input[name="start"]');
+    const endInput = els.filtersForm.querySelector('input[name="end_date"], input[name="end"]');
+    state.filters.startDate = startInput?.value || "";
+    state.filters.endDate = endInput?.value || "";
+  }
   state.activePreset = "custom";
   state.filters.preset = "custom";
 
@@ -2133,6 +2209,7 @@ function handleSearchInput(event) {
 }
 
 function updatePresetButtonsUI() {
+  if (!els.presetButtons) return;
   els.presetButtons.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.preset === state.activePreset);
   });
