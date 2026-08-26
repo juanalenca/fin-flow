@@ -210,7 +210,7 @@ async function initLiveUpdates() {
 
     CapacitorUpdater.notifyAppReady();
 
-    const response = await fetch("https://fn-flow.web.app/version.json", {
+    const response = await fetch("https://fin-flow-app.web.app/version.json", {
       cache: "no-store",
     });
     if (!response.ok) return;
