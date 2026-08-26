@@ -1,7 +1,7 @@
 {
-  "version": "1.0.6",
-  "versionCode": 6,
+  "version": "1.0.7",
+  "versionCode": 7,
   "apkUrl": "https://github.com/juanalenca/fin-flow/releases/latest/download/FinFlow-Release-Signed.apk",
-  "notes": "Correção de inicialização do DOM e listeners de eventos na interface web e mobile.",
+  "notes": "Redesign elegante da Evolução Acumulada de Despesas, novos estados visuais nos cards dinâmicos e controle de fechamento/reabertura de competência.",
   "releasedAt": "2026-08-26"
 }

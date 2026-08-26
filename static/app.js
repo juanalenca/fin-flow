@@ -195,8 +195,8 @@ let unsubscribeTransfers = null;
    INITIALIZATION & AUTO-UPDATES
    ========================================================================== */
 
-const CURRENT_APP_VERSION = "1.0.6";
-const CURRENT_VERSION_CODE = 6;
+const CURRENT_APP_VERSION = "1.0.7";
+const CURRENT_VERSION_CODE = 7;
 
 function initApp() {
   initDOM();
@@ -1139,7 +1139,7 @@ async function closeCurrentMonth() {
 
   const confirmed = await showConfirm(
     "Fechar este mês?",
-    "O FinFlow registrará sobras, economias, pendências e o troco de investimentos para o próximo mês. Nenhuma transferência será feita automaticamente.",
+    "O FinFlow registrará sobras, economias, pendências e o troco de investimentos para o próximo mês. Nenhuma transferência arbitrária será feita.",
     "Fechar mês"
   );
   if (!confirmed) return;
@@ -1194,7 +1194,25 @@ async function closeCurrentMonth() {
   });
 
   recalculateAndRender();
-  showToast("Mês fechado. Sobras e troco estão prontos para o próximo período.");
+  showToast(`Mês ${monthKey} fechado! Sobras encaminhadas para ${nextKey}.`);
+}
+
+async function reopenCurrentMonth() {
+  const monthKey = getActiveMonthKey();
+  const current = getMonthState(monthKey);
+  if (current.status !== "fechado") return;
+
+  const confirmed = await showConfirm(
+    "Reabrir este mês?",
+    `A competência ${monthKey} voltará ao status aberto para inclusão ou edição de lançamentos.`,
+    "Reabrir Mês"
+  );
+  if (!confirmed) return;
+
+  current.status = "aberto";
+  await persistMonthState(current);
+  recalculateAndRender();
+  showToast(`Competência ${monthKey} reaberta.`);
 }
 
 /* ==========================================================================
@@ -1312,8 +1330,15 @@ function renderDynamicWorkspace() {
   const monthKey = getActiveMonthKey();
   const summary = calculateMonth(monthKey);
   const monthState = getMonthState(monthKey);
+  const isClosed = monthState.status === "fechado";
+
   const openDeficits = state.deficits.filter((d) => d.status === "pendente" && d.remaining_cents > 0);
   const pendingFunds = monthState.pending_funds || [];
+
+  const [y, m] = monthKey.split("-").map(Number);
+  const nextMonthKey = `${y + (m === 12 ? 1 : 0)}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}`;
+  const nextMonthState = state.months[nextMonthKey] || {};
+  const nextPendingFunds = nextMonthState.pending_funds || [];
 
   const ledgerRows = BUDGET_KEYS.map((key) => {
     const budget = summary.budgets[key];
@@ -1347,8 +1372,11 @@ function renderDynamicWorkspace() {
       </div>`;
   }).join("");
 
-  const noticesHtml = openDeficits.length
-    ? `<div class="notice-list">
+  // 1. Pendências e Compensações
+  let noticesHtml = "";
+  if (openDeficits.length) {
+    noticesHtml = `
+      <div class="notice-list">
         ${openDeficits
           .map(
             (deficit) => `
@@ -1374,11 +1402,25 @@ function renderDynamicWorkspace() {
             </div>`
           )
           .join("")}
-      </div>`
-    : `<p class="dynamic-desc">Nenhuma pendência orçamentária neste período. Gastos dentro dos limites.</p>`;
+      </div>`;
+  } else {
+    noticesHtml = `
+      <div class="dynamic-empty-card healthy-empty">
+        <div class="dynamic-empty-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+        </div>
+        <div class="dynamic-empty-body">
+          <strong>Tetos Orçamentários Respeitados</strong>
+          <p>Nenhuma pendência neste período. Se algum gasto ultrapassar o limite de Necessidades (50%) ou Desejos (30%), a compensação aparecerá aqui.</p>
+        </div>
+      </div>`;
+  }
 
-  const fundsHtml = pendingFunds.length
-    ? `<div class="fund-list">
+  // 2. Sobras & Decisões de Saldo
+  let fundsHtml = "";
+  if (pendingFunds.length) {
+    fundsHtml = `
+      <div class="fund-list">
         ${pendingFunds
           .map(
             (fund) => `
@@ -1402,18 +1444,88 @@ function renderDynamicWorkspace() {
             </div>`
           )
           .join("")}
-      </div>`
-    : `<p class="dynamic-desc">Nenhum saldo pendente de direcionamento para este mês.</p>`;
+      </div>`;
+  } else if (isClosed && nextPendingFunds.length) {
+    fundsHtml = `
+      <div class="dynamic-empty-card funds-empty">
+        <div class="dynamic-empty-icon-wrap" style="color: var(--color-savings)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+        <div class="dynamic-empty-body">
+          <strong>Sobras Geradas para a Competência ${nextMonthKey}</strong>
+          <p>Este mês foi consolidado e gerou <strong>${nextPendingFunds.length} sobra(s)</strong> prontas para direcionamento no mês seguinte.</p>
+          <button class="btn btn-secondary btn-sm" style="margin-top: 8px;" type="button" data-nav-month="${nextMonthKey}">Ver Sobras em ${nextMonthKey} →</button>
+        </div>
+      </div>`;
+  } else {
+    fundsHtml = `
+      <div class="dynamic-empty-card funds-empty">
+        <div class="dynamic-empty-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+        </div>
+        <div class="dynamic-empty-body">
+          <strong>Nenhum Saldo Pendente de Direcionamento</strong>
+          <p>Ao fechar o mês com saldo positivo em Necessidades ou Desejos, você poderá direcionar sobras para <strong>Objetivos</strong> ou <strong>Investimentos</strong>.</p>
+        </div>
+      </div>`;
+  }
 
   const hasRelevantGoal = state.goals.some((g) => ["abaixo_do_ritmo", "atrasado"].includes(calculateGoalStatus(g).status));
   const recHtml = hasRelevantGoal
-    ? `<div class="recommendation-list">
+    ? `<div class="recommendation-list" style="margin-top: 10px;">
         <div class="recommendation-card">
           <strong>Recomendação Inteligente:</strong>
           <p>Você possui objetivos abaixo do ritmo. Ao receber sobras de orçamento, priorize o aporte na meta para manter o prazo planejado.</p>
         </div>
       </div>`
     : "";
+
+  // 3. Fechamento do Mês
+  let monthCloseHtml = "";
+  if (isClosed) {
+    monthCloseHtml = `
+      <article class="dynamic-panel dynamic-panel-wide">
+        <div class="month-close-bar">
+          <div class="month-close-info">
+            <div class="month-status-pill closed">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Competência ${monthKey} Fechada & Consolidada</span>
+            </div>
+            <p class="dynamic-desc" style="margin-top: 4px;">O troco de investimentos e as sobras foram devidamente transportados para a competência ${nextMonthKey}.</p>
+          </div>
+          <div class="month-close-actions">
+            <button class="btn btn-secondary btn-sm" type="button" data-nav-month="${nextMonthKey}">Ir para ${nextMonthKey} →</button>
+            <button class="btn btn-secondary btn-sm" type="button" id="reopen-month-btn">Reabrir Mês</button>
+          </div>
+        </div>
+      </article>`;
+  } else {
+    const surplusNeeds = summary.budgets.needs.surplus_cents;
+    const surplusWants = summary.budgets.wants.surplus_cents;
+    const totalSurplus = surplusNeeds + surplusWants;
+    const investChange = summary.budgets.savings.investment_change_cents;
+
+    monthCloseHtml = `
+      <article class="dynamic-panel dynamic-panel-wide">
+        <div class="month-close-bar">
+          <div class="month-close-info">
+            <div class="month-status-pill open">
+              <span class="status-pulse-dot"></span>
+              <span>Competência ${monthKey} em Aberto</span>
+            </div>
+            <p class="dynamic-desc" style="margin-top: 4px;">
+              Troco de Investimentos previsto: <strong>${money(investChange)}</strong> | Sobras previstas: <strong>${money(totalSurplus)}</strong>.
+            </p>
+          </div>
+          <div class="month-close-actions">
+            <button class="btn btn-primary" type="button" id="close-month-btn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              Fechar Mês ${monthKey}
+            </button>
+          </div>
+        </div>
+      </article>`;
+  }
 
   els.dynamicWorkspace.innerHTML = `
     <article class="dynamic-panel dynamic-panel-wide">
@@ -1458,15 +1570,7 @@ function renderDynamicWorkspace() {
       ${recHtml}
     </article>
 
-    <article class="dynamic-panel dynamic-panel-wide">
-      <div class="month-close-bar">
-        <div>
-          <h2 class="dynamic-title">Fechamento do Mês</h2>
-          <p>Consolida o período, transporta o troco de investimentos e disponibiliza as sobras para o próximo mês.</p>
-        </div>
-        <button class="btn btn-secondary" type="button" id="close-month-btn">Fechar Mês ${monthKey}</button>
-      </div>
-    </article>`;
+    ${monthCloseHtml}`;
 
   // Listeners dinâmicos
   els.dynamicWorkspace.querySelectorAll('[data-action="compensate"]').forEach((btn) => {
@@ -1478,7 +1582,11 @@ function renderDynamicWorkspace() {
   els.dynamicWorkspace.querySelectorAll('[data-action="split"]').forEach((btn) => {
     btn.addEventListener("click", () => splitFund(btn.closest(".fund-row")));
   });
+  els.dynamicWorkspace.querySelectorAll('[data-nav-month]').forEach((btn) => {
+    btn.addEventListener("click", () => setFilterMonth(btn.dataset.navMonth));
+  });
   els.dynamicWorkspace.querySelector("#close-month-btn")?.addEventListener("click", closeCurrentMonth);
+  els.dynamicWorkspace.querySelector("#reopen-month-btn")?.addEventListener("click", reopenCurrentMonth);
 }
 
 /* ==========================================================================
@@ -1748,6 +1856,26 @@ function renderDistributionChart() {
     </div>`;
 }
 
+function getNiceYAxis(maxCents, steps = 4) {
+  if (maxCents <= 0) return { max: 10000, values: [0, 2500, 5000, 7500, 10000] };
+  const rawStep = maxCents / steps;
+  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const norm = rawStep / mag;
+  let niceNorm = 1;
+  if (norm > 5) niceNorm = 10;
+  else if (norm > 2.5) niceNorm = 5;
+  else if (norm > 1.25) niceNorm = 2.5;
+  else niceNorm = 1;
+  const step = Math.max(100, Math.round(niceNorm * mag));
+  const niceMax = Math.max(maxCents, step * steps);
+  const actualSteps = Math.ceil(niceMax / step);
+  const values = [];
+  for (let i = 0; i <= actualSteps; i++) {
+    values.push(i * step);
+  }
+  return { max: values[values.length - 1], values };
+}
+
 function renderTimelineChart() {
   const container = document.querySelector("#timeline-chart-wrap");
   if (!container) return;
@@ -1778,36 +1906,41 @@ function renderTimelineChart() {
   const dates = Array.from(map.keys()).sort();
   let acc = 0;
   const points = dates.map((d) => {
-    acc += map.get(d);
-    return { date: d, total: acc };
+    const daySpent = map.get(d);
+    acc += daySpent;
+    return { date: d, daySpent, total: acc };
   });
 
   const finalTotal = points[points.length - 1].total;
-  const max = Math.max(finalTotal, 1);
+  const avgPerEntry = Math.round(finalTotal / expenses.length);
+  const lastDate = dates[dates.length - 1];
 
-  const svgWidth = 600;
-  const svgHeight = 180;
-  const padL = 60;
-  const padR = 20;
-  const padT = 20;
-  const padB = 30;
+  const yAxis = getNiceYAxis(finalTotal, 4);
+  const max = Math.max(yAxis.max, 1);
+
+  const svgWidth = 840;
+  const svgHeight = 260;
+  const padL = 95;
+  const padR = 40;
+  const padT = 32;
+  const padB = 45;
   const innerW = svgWidth - padL - padR;
   const innerH = svgHeight - padT - padB;
 
-  const gridSteps = 3;
   let gridLines = "";
-  for (let i = 0; i <= gridSteps; i++) {
-    const yVal = (max / gridSteps) * i;
-    const yPos = padT + innerH - (i / gridSteps) * innerH;
+  yAxis.values.forEach((yVal) => {
+    const yPos = padT + innerH - (yVal / max) * innerH;
     gridLines += `
-      <line x1="${padL}" y1="${yPos}" x2="${svgWidth - padR}" y2="${yPos}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="4 4" />
-      <text x="${padL - 8}" y="${yPos + 4}" text-anchor="end" class="timeline-axis-label">${money(yVal)}</text>`;
-  }
+      <g class="timeline-grid-row">
+        <line x1="${padL}" y1="${yPos.toFixed(1)}" x2="${(svgWidth - padR).toFixed(1)}" y2="${yPos.toFixed(1)}" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
+        <text x="${(padL - 14).toFixed(1)}" y="${(yPos + 4).toFixed(1)}" text-anchor="end" class="timeline-axis-label">${money(yVal)}</text>
+      </g>`;
+  });
 
   const coords = points.map((p, idx) => {
     const x = points.length === 1 ? padL + innerW / 2 : padL + (idx / (points.length - 1)) * innerW;
     const y = padT + innerH - (p.total / max) * innerH;
-    return { x, y, date: p.date, total: p.total };
+    return { x, y, date: p.date, daySpent: p.daySpent, total: p.total };
   });
 
   let areaPath = "";
@@ -1815,8 +1948,8 @@ function renderTimelineChart() {
 
   if (coords.length === 1) {
     const pt = coords[0];
-    areaPath = `M ${padL} ${padT + innerH} L ${padL} ${pt.y.toFixed(1)} L ${svgWidth - padR} ${pt.y.toFixed(1)} L ${svgWidth - padR} ${padT + innerH} Z`;
-    linePath = `M ${padL} ${pt.y.toFixed(1)} L ${svgWidth - padR} ${pt.y.toFixed(1)}`;
+    areaPath = `M ${padL} ${(padT + innerH).toFixed(1)} L ${padL} ${pt.y.toFixed(1)} L ${(svgWidth - padR).toFixed(1)} ${pt.y.toFixed(1)} L ${(svgWidth - padR).toFixed(1)} ${(padT + innerH).toFixed(1)} Z`;
+    linePath = `M ${padL} ${pt.y.toFixed(1)} L ${(svgWidth - padR).toFixed(1)} ${pt.y.toFixed(1)}`;
   } else {
     const first = coords[0];
     const last = coords[coords.length - 1];
@@ -1825,27 +1958,78 @@ function renderTimelineChart() {
     areaPath = `${lineSegs} L ${last.x.toFixed(1)} ${(padT + innerH).toFixed(1)} L ${first.x.toFixed(1)} ${(padT + innerH).toFixed(1)} Z`;
   }
 
+  // X Axis Dates
+  const xLabels = coords.map((c, idx) => {
+    const show = coords.length <= 8 || idx === 0 || idx === coords.length - 1 || idx % Math.ceil(coords.length / 6) === 0;
+    if (!show) return "";
+    const [y, m, d] = c.date.split("-");
+    const label = `${d}/${m}`;
+    return `
+      <g class="timeline-x-tick">
+        <line x1="${c.x.toFixed(1)}" y1="${(padT + innerH).toFixed(1)}" x2="${c.x.toFixed(1)}" y2="${(padT + innerH + 6).toFixed(1)}" stroke="rgba(255,255,255,0.15)" />
+        <text x="${c.x.toFixed(1)}" y="${(padT + innerH + 22).toFixed(1)}" text-anchor="middle" class="timeline-axis-label timeline-x-label">${label}</text>
+      </g>`;
+  }).join("");
+
+  // Point dots
+  const pointCircles = coords.map((c) => {
+    return `
+      <g class="timeline-dot-group" tabindex="0">
+        <title>${formatDate(c.date)}: ${money(c.daySpent)} adicionados (Acumulado: ${money(c.total)})</title>
+        <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="7" fill="#F59E0B" opacity="0.25" />
+        <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="4.5" fill="#F59E0B" stroke="#0C0A09" stroke-width="2" />
+      </g>`;
+  }).join("");
+
+  // Callout badge for the last point
   const lastCoord = coords[coords.length - 1];
+  const calloutText = money(finalTotal);
+  const calloutW = Math.max(92, calloutText.length * 8 + 14);
+  const calloutH = 26;
+  const calloutX = Math.min(Math.max(lastCoord.x - calloutW / 2, padL), svgWidth - padR - calloutW);
+  const calloutY = Math.max(padT - 22, lastCoord.y - 34);
+
+  const callout = `
+    <g class="timeline-callout">
+      <rect x="${calloutX.toFixed(1)}" y="${calloutY.toFixed(1)}" width="${calloutW}" height="${calloutH}" rx="7" fill="#1C1917" stroke="#F59E0B" stroke-width="1.5" />
+      <text x="${(calloutX + calloutW / 2).toFixed(1)}" y="${(calloutY + 16.5).toFixed(1)}" text-anchor="middle" class="timeline-callout-text">${calloutText}</text>
+    </g>`;
 
   container.innerHTML = `
     <div class="timeline-chart-card-inner">
-      <div class="timeline-header-info">
-        <span class="timeline-header-subtitle">Acumulado do Período:</span>
-        <strong class="timeline-header-total">${money(finalTotal)}</strong>
+      <div class="timeline-kpi-bar">
+        <div class="timeline-kpi-item">
+          <span class="timeline-kpi-label">Total Acumulado</span>
+          <strong class="timeline-kpi-val text-gold">${money(finalTotal)}</strong>
+        </div>
+        <div class="timeline-kpi-item">
+          <span class="timeline-kpi-label">Média por Lançamento</span>
+          <strong class="timeline-kpi-val">${money(avgPerEntry)}</strong>
+        </div>
+        <div class="timeline-kpi-item">
+          <span class="timeline-kpi-label">Dias c/ Movimentação</span>
+          <strong class="timeline-kpi-val">${dates.length} ${dates.length === 1 ? "dia" : "dias"}</strong>
+        </div>
+        <div class="timeline-kpi-item">
+          <span class="timeline-kpi-label">Último Lançamento</span>
+          <strong class="timeline-kpi-val">${formatDate(lastDate)}</strong>
+        </div>
       </div>
       <div class="timeline-svg-wrapper">
-        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="none" class="timeline-svg" aria-label="Gráfico de Evolução">
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet" class="timeline-svg" aria-label="Gráfico de Evolução Acumulada">
           <defs>
             <linearGradient id="timelineGoldGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.3"/>
+              <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.35"/>
+              <stop offset="60%" stop-color="#F59E0B" stop-opacity="0.08"/>
               <stop offset="100%" stop-color="#F59E0B" stop-opacity="0.0"/>
             </linearGradient>
           </defs>
           ${gridLines}
           <path d="${areaPath}" fill="url(#timelineGoldGrad)" />
-          <path d="${linePath}" fill="none" stroke="#F59E0B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-          <circle cx="${lastCoord.x.toFixed(1)}" cy="${lastCoord.y.toFixed(1)}" r="5" fill="#F59E0B" />
-          <circle cx="${lastCoord.x.toFixed(1)}" cy="${lastCoord.y.toFixed(1)}" r="2.5" fill="#09090B" />
+          <path d="${linePath}" fill="none" stroke="#F59E0B" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+          ${xLabels}
+          ${pointCircles}
+          ${callout}
         </svg>
       </div>
     </div>`;
@@ -2197,6 +2381,28 @@ function handleCustomDateChange() {
 
   updatePresetButtonsUI();
   recalculateAndRender();
+}
+
+function setFilterMonth(monthKey) {
+  const [y, m] = monthKey.split("-").map(Number);
+  const firstDay = new Date(y, m - 1, 1);
+  const lastDay = new Date(y, m, 0);
+
+  state.filters.startDate = toDateInput(firstDay);
+  state.filters.endDate = toDateInput(lastDay);
+  state.activePreset = "custom";
+  state.filters.preset = "custom";
+
+  if (els.filtersForm) {
+    const startInput = els.filtersForm.querySelector('input[name="start_date"], input[name="start"]');
+    const endInput = els.filtersForm.querySelector('input[name="end_date"], input[name="end"]');
+    if (startInput) startInput.value = state.filters.startDate;
+    if (endInput) endInput.value = state.filters.endDate;
+  }
+
+  updatePresetButtonsUI();
+  recalculateAndRender();
+  showToast(`Exibindo competência ${monthKey}`);
 }
 
 function handleSearchInput(event) {
