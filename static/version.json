@@ -1,7 +1,7 @@
 {
-  "version": "1.0.3",
-  "versionCode": 3,
+  "version": "1.0.4",
+  "versionCode": 4,
   "apkUrl": "https://github.com/juanalenca/fin-flow/releases/latest/download/FinFlow-Release-Signed.apk",
-  "notes": "Nova experiência visual de luxo Fintech (Obsidian & Gold), Glass Dock inferior com FAB, Bottom Sheet nativo e extrato agrupado por dia.",
-  "releasedAt": "2026-08-25"
+  "notes": "Correção definitiva do design dos modais de Login e Novo Lançamento: sem barras pretas laterais, botão de fechar proeminente, campos escuros elegantes e fechamento por toque no fundo.",
+  "releasedAt": "2026-08-26"
 }

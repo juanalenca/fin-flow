@@ -173,8 +173,8 @@ function unsubscribeUserData() {
    INITIALIZATION & AUTO-UPDATES
    ========================================================================== */
 
-const CURRENT_APP_VERSION = "1.0.3";
-const CURRENT_VERSION_CODE = 3;
+const CURRENT_APP_VERSION = "1.0.4";
+const CURRENT_VERSION_CODE = 4;
 
 document.addEventListener("DOMContentLoaded", () => {
   initLiveUpdates();
