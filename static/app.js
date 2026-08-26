@@ -195,8 +195,8 @@ let unsubscribeTransfers = null;
    INITIALIZATION & AUTO-UPDATES
    ========================================================================== */
 
-const CURRENT_APP_VERSION = "1.0.7";
-const CURRENT_VERSION_CODE = 7;
+const CURRENT_APP_VERSION = "1.0.8";
+const CURRENT_VERSION_CODE = 8;
 
 function initApp() {
   initDOM();
@@ -1601,8 +1601,11 @@ function setView(view) {
     btn.classList.toggle("active", btn.dataset.view === view);
   });
 
-  // Switch active panel
-  document.querySelectorAll(".view-panel").forEach((panel) => panel.classList.remove("active"));
+  // Switch active panel with clean animation trigger
+  document.querySelectorAll(".view-panel").forEach((panel) => {
+    panel.classList.remove("active");
+  });
+
   const targetId =
     view === "overview"
       ? "overview-view"
@@ -1612,16 +1615,44 @@ function setView(view) {
       ? "goals-view"
       : "category-view";
   const targetPanel = document.querySelector(`#${targetId}`);
-  if (targetPanel) targetPanel.classList.add("active");
+  if (targetPanel) {
+    targetPanel.classList.add("active");
+    targetPanel.style.animation = "none";
+    targetPanel.offsetHeight; // trigger reflow
+    targetPanel.style.animation = "";
+  }
 
-  // Update Headings
+  // Update Headings with smooth animation
   const titleText = labels[view] || "FinFlow";
   const subText = viewSubtitles[view] || "";
 
-  text("#page-main-title", titleText);
-  text("#page-main-subtitle", subText);
-  if (els.mobileViewTitle) els.mobileViewTitle.textContent = titleText;
-  if (els.mobileViewSubtitle) els.mobileViewSubtitle.textContent = subText;
+  const mainTitle = document.querySelector("#page-main-title");
+  const mainSubtitle = document.querySelector("#page-main-subtitle");
+  if (mainTitle) {
+    mainTitle.classList.remove("view-title-animate");
+    mainTitle.offsetHeight;
+    mainTitle.textContent = titleText;
+    mainTitle.classList.add("view-title-animate");
+  }
+  if (mainSubtitle) {
+    mainSubtitle.classList.remove("view-title-animate");
+    mainSubtitle.offsetHeight;
+    mainSubtitle.textContent = subText;
+    mainSubtitle.classList.add("view-title-animate");
+  }
+
+  if (els.mobileViewTitle) {
+    els.mobileViewTitle.classList.remove("view-title-animate");
+    els.mobileViewTitle.offsetHeight;
+    els.mobileViewTitle.textContent = titleText;
+    els.mobileViewTitle.classList.add("view-title-animate");
+  }
+  if (els.mobileViewSubtitle) {
+    els.mobileViewSubtitle.classList.remove("view-title-animate");
+    els.mobileViewSubtitle.offsetHeight;
+    els.mobileViewSubtitle.textContent = subText;
+    els.mobileViewSubtitle.classList.add("view-title-animate");
+  }
 
   render();
 }

@@ -1,7 +1,7 @@
 {
-  "version": "1.0.7",
-  "versionCode": 7,
+  "version": "1.0.8",
+  "versionCode": 8,
   "apkUrl": "https://github.com/juanalenca/fin-flow/releases/latest/download/FinFlow-Release-Signed.apk",
-  "notes": "Redesign elegante da Evolução Acumulada de Despesas, novos estados visuais nos cards dinâmicos e controle de fechamento/reabertura de competência.",
+  "notes": "Transição suave e natural entre menus, abas de navegação desktop e mobile, e animações fluidas de títulos e painéis.",
   "releasedAt": "2026-08-26"
 }
