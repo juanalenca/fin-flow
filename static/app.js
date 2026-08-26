@@ -129,6 +129,17 @@ function initDOM() {
     userEmail: document.querySelector("#user-email"),
     userAvatarInitials: document.querySelector("#user-avatar-initials"),
 
+    // Mobile Account Dialog & Logout
+    accountDialog: document.querySelector("#account-dialog"),
+    closeAccount: document.querySelector("#close-account"),
+    mobileLogoutBtn: document.querySelector("#mobile-logout-btn"),
+    accountModalAvatar: document.querySelector("#account-modal-avatar"),
+    accountModalName: document.querySelector("#account-modal-name"),
+    accountModalEmail: document.querySelector("#account-modal-email"),
+    mobileHeaderSettings: document.querySelector("#mobile-header-settings"),
+    accountOpenSettingsBtn: document.querySelector("#account-open-settings-btn"),
+    accountOpenVrBtn: document.querySelector("#account-open-vr-btn"),
+
     // Mobile Topbar Actions
     mobileOpenEntry: document.querySelector("#mobile-open-entry"),
     mobileViewTitle: document.querySelector("#mobile-view-title"),
@@ -195,8 +206,8 @@ let unsubscribeTransfers = null;
    INITIALIZATION & AUTO-UPDATES
    ========================================================================== */
 
-const CURRENT_APP_VERSION = "1.0.9";
-const CURRENT_VERSION_CODE = 9;
+const CURRENT_APP_VERSION = "1.1.0";
+const CURRENT_VERSION_CODE = 10;
 
 function initApp() {
   initDOM();
@@ -262,6 +273,17 @@ function showUpdateDialog(updateInfo) {
   updateDialog.showModal();
 }
 
+function toggleSettings(forceShow = null) {
+  if (!els.settingsForm) return;
+  const isHidden = forceShow !== null ? !forceShow : els.settingsForm.hidden;
+  els.settingsForm.hidden = isHidden;
+  if (els.toggleSettingsText) els.toggleSettingsText.textContent = !isHidden ? "Ocultar Bases" : "Ajustar Bases";
+  if (els.toggleSettingsIcon) els.toggleSettingsIcon.style.transform = !isHidden ? "rotate(180deg)" : "rotate(0deg)";
+  if (!isHidden) {
+    els.settingsForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
 /* ==========================================================================
    EVENT LISTENERS SETUP
    ========================================================================== */
@@ -269,11 +291,13 @@ function showUpdateDialog(updateInfo) {
 function setupEventListeners() {
   // Settings Accordion Toggle
   if (els.toggleSettingsBtn) {
-    els.toggleSettingsBtn.addEventListener("click", () => {
-      const isHidden = els.settingsForm.hidden;
-      els.settingsForm.hidden = !isHidden;
-      if (els.toggleSettingsText) els.toggleSettingsText.textContent = isHidden ? "Ocultar Bases" : "Ajustar Bases";
-      if (els.toggleSettingsIcon) els.toggleSettingsIcon.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
+    els.toggleSettingsBtn.addEventListener("click", () => toggleSettings());
+  }
+
+  if (els.mobileHeaderSettings) {
+    els.mobileHeaderSettings.addEventListener("click", () => {
+      setView("overview");
+      toggleSettings(true);
     });
   }
 
@@ -300,18 +324,41 @@ function setupEventListeners() {
     });
   }
 
-  // Auth Triggers
+  // Auth & Account Triggers
   if (els.openAuthBtn) els.openAuthBtn.addEventListener("click", () => openAuthDialog());
   if (els.mobileAuthTrigger) {
     els.mobileAuthTrigger.addEventListener("click", () => {
       if (state.user) {
-        showToast(`Conectado como ${state.user.email}`);
+        if (els.accountModalName) els.accountModalName.textContent = state.user.displayName || state.user.email.split("@")[0];
+        if (els.accountModalEmail) els.accountModalEmail.textContent = state.user.email;
+        if (els.accountModalAvatar) els.accountModalAvatar.textContent = (state.user.displayName || state.user.email)[0].toUpperCase();
+        els.accountDialog?.showModal();
       } else {
         openAuthDialog();
       }
     });
   }
   if (els.closeAuth) els.closeAuth.addEventListener("click", () => els.authDialog?.close());
+  if (els.closeAccount) els.closeAccount.addEventListener("click", () => els.accountDialog?.close());
+  if (els.mobileLogoutBtn) {
+    els.mobileLogoutBtn.addEventListener("click", async () => {
+      els.accountDialog?.close();
+      await handleLogout();
+    });
+  }
+  if (els.accountOpenSettingsBtn) {
+    els.accountOpenSettingsBtn.addEventListener("click", () => {
+      els.accountDialog?.close();
+      setView("overview");
+      toggleSettings(true);
+    });
+  }
+  if (els.accountOpenVrBtn) {
+    els.accountOpenVrBtn.addEventListener("click", () => {
+      els.accountDialog?.close();
+      setView("vr");
+    });
+  }
 
   // Google Login
   if (els.googleAuthBtn) els.googleAuthBtn.addEventListener("click", handleGoogleAuth);
@@ -325,7 +372,7 @@ function setupEventListeners() {
   }
 
   // Fechamento ao clicar fora do card (no backdrop escuro)
-  [els.authDialog, els.entryDialog, els.confirmDialog, document.querySelector("#update-dialog")].forEach((dialog) => {
+  [els.authDialog, els.accountDialog, els.entryDialog, els.confirmDialog, document.querySelector("#update-dialog")].forEach((dialog) => {
     if (!dialog) return;
     dialog.addEventListener("click", (e) => {
       if (e.target === dialog) {
@@ -468,6 +515,10 @@ function renderUserWidget(user) {
       els.mobileUserAvatar.textContent = initial;
       els.mobileUserAvatar.classList.remove("avatar-guest");
     }
+
+    if (els.accountModalAvatar) els.accountModalAvatar.textContent = initial;
+    if (els.accountModalName) els.accountModalName.textContent = user.displayName || user.email.split("@")[0];
+    if (els.accountModalEmail) els.accountModalEmail.textContent = user.email;
   } else {
     if (els.authUnloggedWidget) els.authUnloggedWidget.hidden = false;
     if (els.authLoggedWidget) els.authLoggedWidget.hidden = true;
@@ -2014,15 +2065,17 @@ function renderTimelineChart() {
   const avgPerEntry = Math.round(finalTotal / expenses.length);
   const lastDate = dates[dates.length - 1];
 
-  const yAxis = getNiceYAxis(finalTotal, 4);
+  const isMobile = window.innerWidth <= 640;
+  const ySteps = isMobile ? 3 : 4;
+  const yAxis = getNiceYAxis(finalTotal, ySteps);
   const max = Math.max(yAxis.max, 1);
 
-  const svgWidth = 840;
-  const svgHeight = 260;
-  const padL = 95;
-  const padR = 40;
-  const padT = 32;
-  const padB = 45;
+  const svgWidth = isMobile ? 420 : 840;
+  const svgHeight = isMobile ? 220 : 260;
+  const padL = isMobile ? 74 : 95;
+  const padR = isMobile ? 20 : 40;
+  const padT = isMobile ? 24 : 32;
+  const padB = isMobile ? 36 : 45;
   const innerW = svgWidth - padL - padR;
   const innerH = svgHeight - padT - padB;
 
@@ -2032,7 +2085,7 @@ function renderTimelineChart() {
     gridLines += `
       <g class="timeline-grid-row">
         <line x1="${padL}" y1="${yPos.toFixed(1)}" x2="${(svgWidth - padR).toFixed(1)}" y2="${yPos.toFixed(1)}" stroke="rgba(255,255,255,0.07)" stroke-dasharray="4 4" />
-        <text x="${(padL - 14).toFixed(1)}" y="${(yPos + 4).toFixed(1)}" text-anchor="end" class="timeline-axis-label">${money(yVal)}</text>
+        <text x="${(padL - 10).toFixed(1)}" y="${(yPos + 4).toFixed(1)}" text-anchor="end" class="timeline-axis-label">${money(yVal)}</text>
       </g>`;
   });
 
@@ -2057,16 +2110,17 @@ function renderTimelineChart() {
     areaPath = `${lineSegs} L ${last.x.toFixed(1)} ${(padT + innerH).toFixed(1)} L ${first.x.toFixed(1)} ${(padT + innerH).toFixed(1)} Z`;
   }
 
-  // X Axis Dates
+  // X Axis Dates (smarter spacing on mobile)
+  const maxLabels = isMobile ? 4 : 7;
   const xLabels = coords.map((c, idx) => {
-    const show = coords.length <= 8 || idx === 0 || idx === coords.length - 1 || idx % Math.ceil(coords.length / 6) === 0;
+    const show = coords.length <= maxLabels || idx === 0 || idx === coords.length - 1 || idx % Math.ceil(coords.length / (maxLabels - 1)) === 0;
     if (!show) return "";
     const [y, m, d] = c.date.split("-");
     const label = `${d}/${m}`;
     return `
       <g class="timeline-x-tick">
-        <line x1="${c.x.toFixed(1)}" y1="${(padT + innerH).toFixed(1)}" x2="${c.x.toFixed(1)}" y2="${(padT + innerH + 6).toFixed(1)}" stroke="rgba(255,255,255,0.15)" />
-        <text x="${c.x.toFixed(1)}" y="${(padT + innerH + 22).toFixed(1)}" text-anchor="middle" class="timeline-axis-label timeline-x-label">${label}</text>
+        <line x1="${c.x.toFixed(1)}" y1="${(padT + innerH).toFixed(1)}" x2="${c.x.toFixed(1)}" y2="${(padT + innerH + 5).toFixed(1)}" stroke="rgba(255,255,255,0.15)" />
+        <text x="${c.x.toFixed(1)}" y="${(padT + innerH + 18).toFixed(1)}" text-anchor="middle" class="timeline-axis-label timeline-x-label">${label}</text>
       </g>`;
   }).join("");
 
@@ -2075,23 +2129,23 @@ function renderTimelineChart() {
     return `
       <g class="timeline-dot-group" tabindex="0">
         <title>${formatDate(c.date)}: ${money(c.daySpent)} adicionados (Acumulado: ${money(c.total)})</title>
-        <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="7" fill="#F59E0B" opacity="0.25" />
-        <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="4.5" fill="#F59E0B" stroke="#0C0A09" stroke-width="2" />
+        <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${isMobile ? 6 : 7}" fill="#F59E0B" opacity="0.25" />
+        <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${isMobile ? 4 : 4.5}" fill="#F59E0B" stroke="#0C0A09" stroke-width="2" />
       </g>`;
   }).join("");
 
   // Callout badge for the last point
   const lastCoord = coords[coords.length - 1];
   const calloutText = money(finalTotal);
-  const calloutW = Math.max(92, calloutText.length * 8 + 14);
-  const calloutH = 26;
+  const calloutW = isMobile ? Math.max(80, calloutText.length * 7.5 + 12) : Math.max(92, calloutText.length * 8 + 14);
+  const calloutH = isMobile ? 22 : 26;
   const calloutX = Math.min(Math.max(lastCoord.x - calloutW / 2, padL), svgWidth - padR - calloutW);
-  const calloutY = Math.max(padT - 22, lastCoord.y - 34);
+  const calloutY = Math.max(padT - (isMobile ? 18 : 22), lastCoord.y - (isMobile ? 28 : 34));
 
   const callout = `
     <g class="timeline-callout">
-      <rect x="${calloutX.toFixed(1)}" y="${calloutY.toFixed(1)}" width="${calloutW}" height="${calloutH}" rx="7" fill="#1C1917" stroke="#F59E0B" stroke-width="1.5" />
-      <text x="${(calloutX + calloutW / 2).toFixed(1)}" y="${(calloutY + 16.5).toFixed(1)}" text-anchor="middle" class="timeline-callout-text">${calloutText}</text>
+      <rect x="${calloutX.toFixed(1)}" y="${calloutY.toFixed(1)}" width="${calloutW}" height="${calloutH}" rx="6" fill="#1C1917" stroke="#F59E0B" stroke-width="1.5" />
+      <text x="${(calloutX + calloutW / 2).toFixed(1)}" y="${(calloutY + (isMobile ? 14.5 : 16.5)).toFixed(1)}" text-anchor="middle" class="timeline-callout-text">${calloutText}</text>
     </g>`;
 
   container.innerHTML = `

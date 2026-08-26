@@ -14,7 +14,7 @@
     <link rel="apple-touch-icon" href="icon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=1.0.9">
+    <link rel="stylesheet" href="styles.css?v=1.1.0">
     <script src="capacitor.js"></script>
   </head>
   <body>
@@ -123,9 +123,12 @@
           </div>
 
           <div class="mobile-header-actions">
-            <button id="mobile-open-entry" class="btn btn-primary btn-sm" type="button">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              <span>Novo</span>
+            <button class="mobile-header-chip" data-view="vr" type="button" title="Carteira VR">
+              <span class="nav-dot dot-vr"></span>
+              <span>VR</span>
+            </button>
+            <button id="mobile-header-settings" class="btn-icon mobile-settings-btn" type="button" title="Configurações" aria-label="Configurações">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
             <button id="mobile-auth-trigger" class="mobile-avatar-btn" type="button" title="Minha conta" aria-label="Conta">
               <div class="user-avatar" id="mobile-user-avatar">U</div>
@@ -379,7 +382,7 @@
         </section>
       </main>
 
-      <!-- MOBILE BOTTOM NAVIGATION (GLASS DOCK) -->
+      <!-- MOBILE BOTTOM NAVIGATION (GLASS DOCK SIMÉTRICO) -->
       <nav class="mobile-bottom-nav" aria-label="Navegação Mobile">
         <button class="mob-nav-item active" data-view="overview">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
@@ -404,16 +407,80 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
           <span>Metas</span>
         </button>
-        <button class="mob-nav-item" data-view="vr">
-          <span class="nav-dot dot-vr"></span>
-          <span>VR</span>
-        </button>
         <button class="mob-nav-item" data-view="entries">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
           <span>Extrato</span>
         </button>
       </nav>
     </div>
+
+    <!-- DIALOG: PERFIL & CONTA MOBILE COM LOGOUT -->
+    <dialog id="account-dialog" class="modern-modal modal-account">
+      <div class="modal-card">
+        <div class="modal-drag-handle"></div>
+        <header class="auth-modal-header">
+          <div class="auth-modal-header-inline">
+            <div class="brand-badge-small">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+            </div>
+            <div>
+              <h2 class="auth-title">Minha Conta</h2>
+              <p class="auth-subtitle">Sessão e preferências da conta</p>
+            </div>
+          </div>
+          <button class="btn-close-modal auth-close" type="button" id="close-account" aria-label="Fechar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </header>
+
+        <div class="account-card-body">
+          <div class="account-profile-header">
+            <div class="account-avatar-large" id="account-modal-avatar">U</div>
+            <div class="account-profile-info">
+              <strong class="account-modal-name" id="account-modal-name">Usuário</strong>
+              <span class="account-modal-email" id="account-modal-email">email@exemplo.com</span>
+              <div class="account-sync-badge">
+                <span class="status-pulse-dot"></span>
+                <span>Conectado ao Firebase Cloud</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="account-menu-list">
+            <button class="account-menu-item" id="account-open-settings-btn" type="button">
+              <div class="account-menu-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              </div>
+              <div class="account-menu-text">
+                <strong>Configurações de Orçamento</strong>
+                <span>Renda mensal, metas e saldo VR</span>
+              </div>
+              <svg class="account-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+
+            <button class="account-menu-item" id="account-open-vr-btn" type="button" data-view="vr">
+              <div class="account-menu-icon" style="color: var(--color-vr)">
+                <span class="nav-dot dot-vr"></span>
+              </div>
+              <div class="account-menu-text">
+                <strong>Carteira VR (Alimentação)</strong>
+                <span>Extrato e saldo exclusivo para refeições</span>
+              </div>
+              <svg class="account-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+          </div>
+
+          <div class="account-modal-footer">
+            <button id="mobile-logout-btn" class="btn-danger-soft btn-full" type="button">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+              <span>Sair da Conta (Logout)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
 
     <!-- DIALOG: MODAL CLEAN DE AUTENTICAÇÃO (GOOGLE + EMAIL/SENHA) -->
     <dialog id="auth-dialog" class="modern-modal modal-auth">
@@ -693,6 +760,6 @@
     </div>
 
     <!-- SCRIPT DA APLICAÇÃO (FIREBASE INTEGRADO) -->
-    <script type="module" src="app.js?v=1.0.9"></script>
+    <script type="module" src="app.js?v=1.1.0"></script>
   </body>
 </html>
