@@ -30,5 +30,8 @@
     "@capacitor/splash-screen": "^7.0.0",
     "@capacitor/status-bar": "^7.0.0",
     "@capgo/capacitor-updater": "^7.50.2"
+  },
+  "devDependencies": {
+    "impeccable": "^3.6.0"
   }
 }
