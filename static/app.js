@@ -1,5 +1,6 @@
 /* ==========================================================================
    FINFLOW - FIREBASE CONTROLLER & STATE MANAGEMENT (SDK v12 MODULAR)
+   Gestão Financeira Inteligente 50/30/20 & Objetivos Financeiros
    ========================================================================== */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
@@ -28,6 +29,14 @@ import {
   orderBy,
   onSnapshot,
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import {
+  BUDGET_KEYS,
+  budgetFromIncome,
+  calculateGoalStatus,
+  calculateMonthlyBudget,
+  monthKeyFromDate,
+  splitEqually,
+} from "./financial-engine.js";
 
 /* Firebase Configuration */
 const firebaseConfig = {
@@ -55,20 +64,22 @@ const labels = {
   savings: "20% Investimentos",
   vr: "Carteira VR",
   entries: "Todos os Lançamentos",
+  goals: "Objetivos",
 };
 
 const viewSubtitles = {
-  overview: "Acompanhe seu fluxo de caixa mensal e distribuição do orçamento.",
+  overview: "Acompanhe seu fluxo de caixa mensal, gestão dinâmica e distribuição do orçamento.",
   needs: "Gastos essenciais como moradia, alimentação básica, contas e saúde (limite de 50%).",
   wants: "Gastos com estilo de vida, lazer, hobbies, restaurantes e compras (limite de 30%).",
   savings: "Aportes para reserva de emergência, metas de médio prazo e investimentos (mínimo de 20%).",
   vr: "Controle específico de saldo, recebimentos e gastos do seu Vale-Refeição/Alimentação.",
   entries: "Histórico detalhado e extrato de todas as transações cadastradas.",
+  goals: "Acompanhe objetivos, metas de longo prazo e ritmo de aportes dos seus planos.",
 };
 
 const colors = {
   needs: "#10B981",
-  wants: "#FDB72D",
+  wants: "#F59E0B",
   savings: "#3B82F6",
   vr: "#EC4899",
 };
@@ -76,7 +87,15 @@ const colors = {
 /* Application State */
 const state = {
   user: null,
-  settings: { monthly_income_cents: 0, vr_initial_balance_cents: 0 },
+  settings: {
+    monthly_income_cents: 0,
+    vr_initial_balance_cents: 0,
+    budget_goals_cents: { needs: 0, wants: 0 },
+  },
+  months: {},
+  deficits: [],
+  goals: [],
+  transfers: [],
   rawEntries: [],
   filteredEntries: [],
   summary: null,
@@ -119,6 +138,12 @@ const els = {
   toggleSettingsText: document.querySelector("#toggle-settings-text"),
   toggleSettingsIcon: document.querySelector("#toggle-settings-icon"),
 
+  // Dynamic Workspace & Goals
+  dynamicWorkspace: document.querySelector("#dynamic-workspace"),
+  goalsView: document.querySelector("#goals-view"),
+  goalsList: document.querySelector("#goals-list"),
+  goalsForm: document.querySelector("#goal-form"),
+
   // Filters
   filtersForm: document.querySelector("#filters-form"),
   presetButtons: document.querySelectorAll("[data-preset]"),
@@ -157,102 +182,102 @@ let toastFadeTimeout = null;
 let confirmResolve = null;
 let unsubscribeSettings = null;
 let unsubscribeEntries = null;
-
-function unsubscribeUserData() {
-  if (typeof unsubscribeSettings === "function") {
-    unsubscribeSettings();
-    unsubscribeSettings = null;
-  }
-  if (typeof unsubscribeEntries === "function") {
-    unsubscribeEntries();
-    unsubscribeEntries = null;
-  }
-}
+let unsubscribeMonths = null;
+let unsubscribeDeficits = null;
+let unsubscribeGoals = null;
+let unsubscribeTransfers = null;
 
 /* ==========================================================================
    INITIALIZATION & AUTO-UPDATES
    ========================================================================== */
 
-const CURRENT_APP_VERSION = "1.0.4";
-const CURRENT_VERSION_CODE = 4;
+const CURRENT_APP_VERSION = "1.0.5";
+const CURRENT_VERSION_CODE = 5;
 
 document.addEventListener("DOMContentLoaded", () => {
   initLiveUpdates();
-  wireEvents();
-  hydrateFilterFields();
+  setupEventListeners();
   setupCurrencyMasks();
-
-  // Load guest data initially
-  loadGuestData();
-
-  // Listen to Firebase Auth state in real time
-  onAuthStateChanged(auth, async (user) => {
-    state.user = user;
-    if (user) {
-      updateUserUI(user);
-      await loadUserData();
-    } else {
-      unsubscribeUserData();
-      updateGuestUI();
-      loadGuestData();
-    }
-  });
-
-  // Verificação silenciosa de novas versões após a carga inicial
-  setTimeout(() => {
-    checkForUpdates(false);
-  }, 2500);
+  initAuthObserver();
 });
 
 async function initLiveUpdates() {
-  if (window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform()) {
-    try {
-      const updater = window.Capacitor?.Plugins?.CapacitorUpdater;
-      if (updater && typeof updater.notifyAppReady === "function") {
-        await updater.notifyAppReady();
-        console.log("Capgo Live Updates: Versão validada com sucesso.");
-      }
-    } catch (err) {
-      console.warn("Capgo Live Updates:", err);
+  if (!window.Capacitor?.isNativePlatform()) return;
+
+  try {
+    const { CapacitorUpdater } = window.Capacitor.Plugins || {};
+    if (!CapacitorUpdater) return;
+
+    CapacitorUpdater.notifyAppReady();
+
+    const response = await fetch("https://fn-flow.web.app/version.json", {
+      cache: "no-store",
+    });
+    if (!response.ok) return;
+
+    const remoteInfo = await response.json();
+    if (remoteInfo.versionCode > CURRENT_VERSION_CODE || isNewerVersion(remoteInfo.version, CURRENT_APP_VERSION)) {
+      showUpdateDialog(remoteInfo);
     }
+  } catch (err) {
+    console.warn("Verificação de Live Update:", err);
   }
 }
 
-async function checkForUpdates(manual = false) {
-  try {
-    const res = await fetch("version.json?t=" + Date.now(), { cache: "no-store" });
-    if (!res.ok) return;
-    const remote = await res.json();
-
-    if (remote && Number(remote.versionCode) > CURRENT_VERSION_CODE) {
-      const updateDialog = document.querySelector("#update-dialog");
-      if (updateDialog) {
-        text("#update-modal-version", `FinFlow v${remote.version}`);
-        text("#update-modal-notes", remote.notes || "Nova versão disponível com melhorias e correções.");
-        text("#update-modal-date", remote.releasedAt ? formatDate(remote.releasedAt) : "Hoje");
-        const downloadBtn = document.querySelector("#update-modal-download");
-        if (downloadBtn) {
-          downloadBtn.href = remote.apkUrl || "https://github.com/juanalenca/fin-flow/releases/latest/download/FinFlow-Release-Signed.apk";
-        }
-        updateDialog.showModal();
-      }
-    } else if (manual) {
-      showToast(`Você já está na versão mais recente (v${CURRENT_APP_VERSION}).`);
-    }
-  } catch (err) {
-    if (manual) {
-      showToast("Não foi possível verificar atualizações no momento.");
-    }
-    console.warn("In-App update check:", err);
+function isNewerVersion(remote, local) {
+  const r = remote.split(".").map(Number);
+  const l = local.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((r[i] || 0) > (l[i] || 0)) return true;
+    if ((r[i] || 0) < (l[i] || 0)) return false;
   }
+  return false;
+}
+
+function showUpdateDialog(updateInfo) {
+  const updateDialog = document.querySelector("#update-dialog");
+  if (!updateDialog) return;
+
+  const versionEl = document.querySelector("#update-modal-version");
+  const notesEl = document.querySelector("#update-modal-notes");
+  const dateEl = document.querySelector("#update-modal-date");
+  const downloadBtn = document.querySelector("#update-modal-download");
+
+  if (versionEl) versionEl.textContent = `FinFlow v${updateInfo.version}`;
+  if (notesEl) notesEl.textContent = updateInfo.notes || "Melhorias de desempenho e novas funcionalidades.";
+  if (dateEl) dateEl.textContent = updateInfo.releasedAt || "Hoje";
+  if (downloadBtn) downloadBtn.href = updateInfo.apkUrl;
+
+  updateDialog.showModal();
 }
 
 /* ==========================================================================
-   EVENT WIRING
+   EVENT LISTENERS SETUP
    ========================================================================== */
 
-function wireEvents() {
-  // Open / Close Auth Dialog
+function setupEventListeners() {
+  // Settings Accordion Toggle
+  if (els.toggleSettingsBtn) {
+    els.toggleSettingsBtn.addEventListener("click", () => {
+      const isHidden = els.settingsForm.hidden;
+      els.settingsForm.hidden = !isHidden;
+      els.toggleSettingsText.textContent = isHidden ? "Ocultar Bases" : "Ajustar Bases";
+      els.toggleSettingsIcon.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
+    });
+  }
+
+  els.settingsForm.addEventListener("submit", handleSettingsSubmit);
+
+  // Filters Events
+  els.filtersForm.addEventListener("submit", (e) => e.preventDefault());
+  els.presetButtons.forEach((btn) => {
+    btn.addEventListener("click", () => handlePresetChange(btn.dataset.preset));
+  });
+  els.filtersForm.start_date.addEventListener("change", handleCustomDateChange);
+  els.filtersForm.end_date.addEventListener("change", handleCustomDateChange);
+  els.filtersForm.search.addEventListener("input", handleSearchInput);
+
+  // Auth Triggers
   if (els.openAuthBtn) els.openAuthBtn.addEventListener("click", () => openAuthDialog());
   if (els.mobileAuthTrigger) {
     els.mobileAuthTrigger.addEventListener("click", () => {
@@ -294,23 +319,13 @@ function wireEvents() {
   els.authForm.addEventListener("submit", handleAuthSubmit);
   if (els.logoutButton) els.logoutButton.addEventListener("click", handleLogout);
 
-  // Settings
-  els.toggleSettingsBtn.addEventListener("click", toggleSettings);
-  els.settingsForm.addEventListener("submit", handleSettingsSubmit);
-
-  // Filters
-  els.presetButtons.forEach((btn) => {
-    btn.addEventListener("click", () => applyPreset(btn.dataset.preset));
-  });
-  els.filtersForm.start.addEventListener("change", handleCustomDateChange);
-  els.filtersForm.end.addEventListener("change", handleCustomDateChange);
-  els.filtersForm.search.addEventListener("input", handleSearchInput);
-  els.filtersForm.addEventListener("submit", (e) => e.preventDefault());
-
   // Views Navigation (Desktop & Mobile)
   document.querySelectorAll("[data-view]").forEach((btn) => {
     btn.addEventListener("click", () => setView(btn.dataset.view));
   });
+
+  // Goals Form
+  if (els.goalsForm) els.goalsForm.addEventListener("submit", handleGoalSubmit);
 
   // Entry Modal Triggers (Desktop & Mobile)
   const triggerEntry = () => openEntryDialog();
@@ -322,8 +337,8 @@ function wireEvents() {
   const mobileDockNewBtn = document.querySelector("#mobile-dock-new-btn");
   if (mobileDockNewBtn) mobileDockNewBtn.addEventListener("click", triggerEntry);
 
-  document.querySelector("#close-entry").addEventListener("click", () => els.entryDialog.close());
-  document.querySelector("#cancel-entry").addEventListener("click", () => els.entryDialog.close());
+  document.querySelector("#close-entry")?.addEventListener("click", () => els.entryDialog.close());
+  document.querySelector("#cancel-entry")?.addEventListener("click", () => els.entryDialog.close());
   els.entryForm.addEventListener("submit", handleEntrySubmit);
   els.deleteEntry.addEventListener("click", handleEntryDelete);
 
@@ -379,64 +394,80 @@ function setAuthMode(mode) {
   });
 
   if (mode === "register") {
-    els.authModalTitle.textContent = "Criar nova conta";
-    els.authModalSubtitle.textContent = "Comece seu controle financeiro no Firebase em segundos.";
+    els.authModalTitle.textContent = "Crie sua conta";
+    els.authModalSubtitle.textContent = "Comece sua jornada de gestão financeira inteligente";
+    els.authSubmitBtn.querySelector("span").textContent = "Criar conta";
     els.nameField.hidden = false;
-    els.authSubmitBtn.querySelector("span").textContent = "Criar minha conta";
-    els.authForm.password.autocomplete = "new-password";
   } else {
     els.authModalTitle.textContent = "Acesse sua conta";
-    els.authModalSubtitle.textContent = "Sincronize seus dados financeiros com segurança no Firebase.";
-    els.nameField.hidden = true;
+    els.authModalSubtitle.textContent = "Sincronize seus dados com segurança na nuvem";
     els.authSubmitBtn.querySelector("span").textContent = "Entrar no FinFlow";
-    els.authForm.password.autocomplete = "current-password";
+    els.nameField.hidden = true;
   }
-
   hideAlert(els.authMessage);
+}
+
+function initAuthObserver() {
+  onAuthStateChanged(auth, async (user) => {
+    state.user = user;
+    renderUserWidget(user);
+
+    if (user) {
+      initFirestoreListeners(user);
+    } else {
+      cleanupListeners();
+      loadGuestData();
+    }
+  });
+}
+
+function renderUserWidget(user) {
+  if (user) {
+    els.authUnloggedWidget.hidden = true;
+    els.authLoggedWidget.hidden = false;
+    els.userDisplayName.textContent = user.displayName || user.email.split("@")[0];
+    els.userEmail.textContent = user.email;
+
+    const initial = (user.displayName || user.email)[0].toUpperCase();
+    els.userAvatarInitials.textContent = initial;
+
+    if (els.mobileUserAvatar) {
+      els.mobileUserAvatar.textContent = initial;
+      els.mobileUserAvatar.classList.remove("avatar-guest");
+    }
+  } else {
+    els.authUnloggedWidget.hidden = false;
+    els.authLoggedWidget.hidden = true;
+    if (els.mobileUserAvatar) {
+      els.mobileUserAvatar.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+      els.mobileUserAvatar.classList.add("avatar-guest");
+    }
+  }
 }
 
 async function handleGoogleAuth() {
   hideAlert(els.authMessage);
   try {
-    const isNative = Boolean(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
-    const nativeAuth = window.Capacitor?.Plugins?.FirebaseAuthentication;
-
-    if (isNative) {
-      if (!nativeAuth) {
-        throw new Error("Módulo de autenticação nativa indisponível no dispositivo. Utilize login por E-mail e Senha.");
-      }
-
-      // Autenticação nativa oficial do Android / iOS (Janela de 1 toque nativa)
-      let res;
-      try {
-        // Tenta fluxo com Credential Manager do Android
-        res = await nativeAuth.signInWithGoogle();
-      } catch (credErr) {
-        console.warn("CredentialManager failed, tentando GoogleSignIn padrão:", credErr);
-        // Tenta fallback com GoogleSignInClient clássico
-        res = await nativeAuth.signInWithGoogle({ useCredentialManager: false });
-      }
-      
-      if (res && res.credential && res.credential.idToken) {
-        const credential = GoogleAuthProvider.credential(res.credential.idToken);
-        const userCred = await signInWithCredential(auth, credential);
-        const user = userCred.user;
-        showToast(`Bem-vindo(a), ${user.displayName || user.email}!`);
-        els.authDialog.close();
-        return;
-      } else if (res && res.user) {
-        state.user = res.user;
-        updateUserUI(res.user);
-        await loadUserData();
-        showToast(`Bem-vindo(a), ${res.user.displayName || res.user.email}!`);
-        els.authDialog.close();
-        return;
-      } else {
-        throw new Error("Não foi possível obter os dados da conta Google.");
+    if (window.Capacitor?.isNativePlatform()) {
+      const { FirebaseAuthentication } = window.Capacitor.Plugins || {};
+      if (FirebaseAuthentication) {
+        const result = await FirebaseAuthentication.signInWithGoogle();
+        const idToken = result.credential?.idToken;
+        if (idToken) {
+          const credential = GoogleAuthProvider.credential(idToken);
+          await signInWithCredential(auth, credential);
+          showToast(`Conectado como ${auth.currentUser.displayName || auth.currentUser.email}!`);
+          els.authDialog.close();
+          return;
+        }
+        if (result.user) {
+          showToast(`Conectado como ${result.user.displayName || result.user.email}!`);
+          els.authDialog.close();
+          return;
+        }
       }
     }
 
-    // Fluxo exclusivo para navegadores web (desktop / mobile browser)
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
     showToast(`Bem-vindo(a), ${user.displayName || user.email}!`);
@@ -444,23 +475,21 @@ async function handleGoogleAuth() {
   } catch (error) {
     console.error("Google Auth Error:", error);
     if (
-      error.code === "auth/popup-closed-by-user" || 
+      error.code === "auth/popup-closed-by-user" ||
       error.code === "auth/cancelled-popup-request" ||
       error.message?.includes("CANCELED") ||
       error.message?.includes("canceled") ||
-      error.message?.includes("12501") // Google Sign-In user cancelled code
+      error.message?.includes("12501")
     ) {
       return;
     }
     let msg = "Erro ao autenticar com o Google.";
-    if (error.message?.includes("No credentials available") || error.message?.includes("10:") || error.message?.includes("DEVELOPER_ERROR")) {
-      msg = "Configuração do Google pendente no Firebase: O 'ID do Cliente Web' e a chave 'SHA-1' precisam ser vinculados no Firebase Console. Utilize o login por E-mail e Senha.";
-    } else if (error.code === "auth/unauthorized-domain") {
-      msg = "Domínio não autorizado pelo Firebase. Utilize login por E-mail e Senha.";
+    if (error.code === "auth/unauthorized-domain") {
+      msg = "Domínio não autorizado pelo Firebase. Utilize login por E-mail e Senha ou acesse mapeamento-esportivo.web.app.";
     } else if (error.code === "auth/operation-not-allowed") {
       msg = "O login com o Google precisa ser ativado no Firebase Console (Authentication > Sign-in method).";
     } else if (error.message) {
-      msg = `${error.message} (${error.code || 'erro'})`;
+      msg = `${error.message} (${error.code || "erro"})`;
     }
     showAlert(els.authMessage, msg);
   }
@@ -479,39 +508,32 @@ async function handleAuthSubmit(event) {
   const data = Object.fromEntries(new FormData(els.authForm));
   const email = data.email.trim();
   const password = data.password;
-  const name = data.name ? data.name.trim() : "";
 
   try {
     if (authMode === "register") {
-      const userCred = await createUserWithEmailAndPassword(auth, email, password);
-      if (name && userCred.user) {
-        await updateProfile(userCred.user, { displayName: name });
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      if (data.name?.trim()) {
+        await updateProfile(cred.user, { displayName: data.name.trim() });
       }
-      showToast(`Conta criada com sucesso! Bem-vindo(a), ${name || email}!`);
+      showToast("Conta criada com sucesso!");
     } else {
       await signInWithEmailAndPassword(auth, email, password);
-      showToast("Login realizado com sucesso!");
+      showToast("Sessão iniciada com sucesso!");
     }
-    els.authDialog.close();
     els.authForm.reset();
-  } catch (error) {
-    console.error("Firebase Auth Error:", error);
-    let msg = "Erro ao autenticar. Verifique seus dados.";
-    
-    if (error.code === "auth/operation-not-allowed") {
-      msg = "O método E-mail/Senha não está ativado no Firebase Console. Ative-o em Authentication > Sign-in method no projeto mapeamento-esportivo.";
-    } else if (error.code === "auth/email-already-in-use") {
-      msg = "Este e-mail já está cadastrado. Alterne para a aba 'Entrar'.";
-    } else if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential" || error.code === "auth/user-not-found") {
+    els.authDialog.close();
+  } catch (err) {
+    console.error(err);
+    let msg = "Erro ao processar autenticação.";
+    if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
       msg = "E-mail ou senha incorretos.";
-    } else if (error.code === "auth/weak-password") {
+    } else if (err.code === "auth/email-already-in-use") {
+      msg = "Este e-mail já está cadastrado. Faça login.";
+    } else if (err.code === "auth/weak-password") {
       msg = "A senha deve ter pelo menos 6 caracteres.";
-    } else if (error.code === "auth/invalid-email") {
+    } else if (err.code === "auth/invalid-email") {
       msg = "Formato de e-mail inválido.";
-    } else if (error.message) {
-      msg = `${error.message} (${error.code || 'erro'})`;
     }
-    
     showAlert(els.authMessage, msg);
   } finally {
     btnSpan.textContent = origText;
@@ -520,207 +542,186 @@ async function handleAuthSubmit(event) {
 }
 
 async function handleLogout() {
-  try {
+  const confirmed = await showConfirm("Deseja sair da conta?", "Seus dados continuarão salvos e seguros no Firebase.");
+  if (confirmed) {
     await signOut(auth);
-    showToast("Sessão finalizada.");
-  } catch (error) {
-    showToast("Erro ao deslogar.");
-  }
-}
-
-function updateUserUI(user) {
-  els.authUnloggedWidget.hidden = true;
-  els.authLoggedWidget.hidden = false;
-
-  const displayName = user.displayName || user.email.split("@")[0];
-  const initial = displayName.charAt(0).toUpperCase();
-
-  els.userDisplayName.textContent = displayName;
-  els.userEmail.textContent = user.email;
-  els.userAvatarInitials.textContent = initial;
-
-  if (els.mobileUserAvatar) {
-    els.mobileUserAvatar.textContent = initial;
-    els.mobileUserAvatar.style.background = "var(--primary)";
-    els.mobileUserAvatar.style.color = "#070604";
-  }
-}
-
-function updateGuestUI() {
-  els.authUnloggedWidget.hidden = false;
-  els.authLoggedWidget.hidden = true;
-
-  if (els.mobileUserAvatar) {
-    els.mobileUserAvatar.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
-    els.mobileUserAvatar.style.background = "var(--primary)";
-    els.mobileUserAvatar.style.color = "#070604";
+    showToast("Você saiu da sua conta.");
   }
 }
 
 /* ==========================================================================
-   GUEST (LOCALSTORAGE) & CLOUD (FIRESTORE) DATA MANAGEMENT
+   FIRESTORE REALTIME SYNC & LOCAL DATA
    ========================================================================== */
 
-function loadGuestData() {
-  try {
-    const savedSettings = localStorage.getItem("finflow_guest_settings");
-    state.settings = savedSettings ? JSON.parse(savedSettings) : { monthly_income_cents: 0, vr_initial_balance_cents: 0 };
+function cleanupListeners() {
+  if (unsubscribeSettings) unsubscribeSettings();
+  if (unsubscribeEntries) unsubscribeEntries();
+  if (unsubscribeMonths) unsubscribeMonths();
+  if (unsubscribeDeficits) unsubscribeDeficits();
+  if (unsubscribeGoals) unsubscribeGoals();
+  if (unsubscribeTransfers) unsubscribeTransfers();
+}
 
-    const savedEntries = localStorage.getItem("finflow_guest_entries");
+function loadGuestData() {
+  const savedSettings = localStorage.getItem("finflow_guest_settings");
+  const savedEntries = localStorage.getItem("finflow_guest_entries");
+  const savedDynamic = JSON.parse(localStorage.getItem("finflow_guest_dynamic") || "{}");
+
+  if (savedSettings || savedEntries || savedDynamic.goals) {
+    state.settings = savedSettings ? JSON.parse(savedSettings) : { monthly_income_cents: 0, vr_initial_balance_cents: 0, budget_goals_cents: { needs: 0, wants: 0 } };
+    state.settings.budget_goals_cents ||= { needs: 0, wants: 0 };
     state.rawEntries = savedEntries ? JSON.parse(savedEntries) : [];
-  } catch (e) {
-    state.settings = { monthly_income_cents: 0, vr_initial_balance_cents: 0 };
+    state.months = savedDynamic.months || {};
+    state.deficits = savedDynamic.deficits || [];
+    state.goals = savedDynamic.goals || [];
+    state.transfers = savedDynamic.transfers || [];
+  } else {
+    state.settings = { monthly_income_cents: 0, vr_initial_balance_cents: 0, budget_goals_cents: { needs: 0, wants: 0 } };
     state.rawEntries = [];
+    state.months = {};
+    state.deficits = [];
+    state.goals = [];
+    state.transfers = [];
   }
+
   recalculateAndRender();
 }
 
 function saveGuestData() {
-  try {
-    localStorage.setItem("finflow_guest_settings", JSON.stringify(state.settings));
-    localStorage.setItem("finflow_guest_entries", JSON.stringify(state.rawEntries));
-  } catch (e) {
-    console.warn("LocalStorage save error:", e);
-  }
+  localStorage.setItem("finflow_guest_settings", JSON.stringify(state.settings));
+  localStorage.setItem("finflow_guest_entries", JSON.stringify(state.rawEntries));
+  localStorage.setItem(
+    "finflow_guest_dynamic",
+    JSON.stringify({
+      months: state.months,
+      deficits: state.deficits,
+      goals: state.goals,
+      transfers: state.transfers,
+    })
+  );
 }
 
-async function loadUserData() {
-  if (!state.user) return;
-  const uid = state.user.uid;
+function initFirestoreListeners(user) {
+  cleanupListeners();
 
-  unsubscribeUserData();
+  const settingsDocRef = doc(db, "users", user.uid, "meta", "settings");
+  unsubscribeSettings = onSnapshot(settingsDocRef, (snap) => {
+    if (snap.exists()) {
+      state.settings = { ...state.settings, ...snap.data() };
+      state.settings.budget_goals_cents ||= { needs: 0, wants: 0 };
+    } else {
+      state.settings = { monthly_income_cents: 0, vr_initial_balance_cents: 0, budget_goals_cents: { needs: 0, wants: 0 } };
+    }
+    recalculateAndRender();
+  });
 
-  try {
-    // 1. Ouvinte em tempo real para configurações do usuário (Renda, Saldo VR)
-    const settingsDocRef = doc(db, "users", uid, "settings", "config");
-    unsubscribeSettings = onSnapshot(
-      settingsDocRef,
-      async (settingsSnap) => {
-        if (settingsSnap.exists()) {
-          state.settings = settingsSnap.data();
-        } else {
-          // Migração de configurações locais se existirem
-          if (state.settings.monthly_income_cents > 0 || state.settings.vr_initial_balance_cents > 0) {
-            await setDoc(settingsDocRef, { ...state.settings, updatedAt: new Date().toISOString() });
-          }
-        }
-        recalculateAndRender();
-      },
-      (error) => {
-        console.warn("Erro no listener em tempo real de configurações:", error);
-      }
-    );
+  const entriesRef = collection(db, "users", user.uid, "entries");
+  const entriesQuery = query(entriesRef, orderBy("date", "desc"));
+  unsubscribeEntries = onSnapshot(entriesQuery, (snap) => {
+    state.rawEntries = snap.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...docSnap.data(),
+    }));
+    recalculateAndRender();
+  });
 
-    // 2. Ouvinte em tempo real para coleção de lançamentos (Entries)
-    const entriesCol = collection(db, "users", uid, "entries");
-    const entriesQuery = query(entriesCol, orderBy("date", "desc"));
-    unsubscribeEntries = onSnapshot(
-      entriesQuery,
-      async (querySnapshot) => {
-        state.rawEntries = [];
-        querySnapshot.forEach((d) => {
-          state.rawEntries.push({ id: d.id, ...d.data() });
-        });
+  const bindSub = (subName, onUpdate) =>
+    onSnapshot(collection(db, "users", user.uid, subName), (snap) => {
+      onUpdate(snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+      recalculateAndRender();
+    });
 
-        // Migração de lançamentos locais de visitante se a nuvem estiver vazia
-        const guestEntries = JSON.parse(localStorage.getItem("finflow_guest_entries") || "[]");
-        if (guestEntries.length > 0 && state.rawEntries.length === 0) {
-          for (const entry of guestEntries) {
-            const { id, ...entryData } = entry;
-            await addDoc(collection(db, "users", uid, "entries"), {
-              ...entryData,
-              createdAt: entryData.createdAt || new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            });
-          }
-          localStorage.removeItem("finflow_guest_entries");
-          showToast("Seus lançamentos locais foram sincronizados na nuvem!");
-        }
-
-        recalculateAndRender();
-      },
-      (error) => {
-        console.error("Erro no listener em tempo real do Firestore:", error);
-        showToast("Aviso: operando com dados locais / offline.");
-      }
-    );
-  } catch (error) {
-    console.error("Erro ao inicializar conexão com Firestore:", error);
-    showToast("Aviso: operando com dados locais.");
-  }
+  unsubscribeMonths = bindSub("months", (items) => {
+    state.months = Object.fromEntries(items.map((item) => [item.month_key || item.id, item]));
+  });
+  unsubscribeDeficits = bindSub("deficits", (items) => {
+    state.deficits = items;
+  });
+  unsubscribeGoals = bindSub("goals", (items) => {
+    state.goals = items;
+  });
+  unsubscribeTransfers = bindSub("transfers", (items) => {
+    state.transfers = items;
+  });
 }
+
+/* ==========================================================================
+   SETTINGS & BASES ORÇAMENTÁRIAS
+   ========================================================================== */
 
 async function handleSettingsSubmit(event) {
   event.preventDefault();
-  els.settingsMessage.textContent = "";
+  hideAlert(els.settingsMessage);
 
   try {
     const monthly_income_cents = parseMoney(els.settingsForm.monthly_income.value);
     const vr_initial_balance_cents = parseMoney(els.settingsForm.vr_initial.value);
+    const needs_goal_cents = parseMoney(els.settingsForm.needs_goal.value);
+    const wants_goal_cents = parseMoney(els.settingsForm.wants_goal.value);
 
-    const body = {
+    const ceilings = budgetFromIncome(monthly_income_cents);
+    if (needs_goal_cents > ceilings.needs || wants_goal_cents > ceilings.wants) {
+      throw new Error("A meta de gastos não pode ser maior que o teto da categoria.");
+    }
+
+    const payload = {
       monthly_income_cents,
       vr_initial_balance_cents,
+      budget_goals_cents: { needs: needs_goal_cents, wants: wants_goal_cents },
       updatedAt: new Date().toISOString(),
     };
 
-    state.settings = body;
-
     if (state.user) {
-      const settingsDocRef = doc(db, "users", state.user.uid, "settings", "config");
-      await setDoc(settingsDocRef, body, { merge: true });
-      showToast("Renda e VR sincronizados na nuvem!");
+      const settingsDocRef = doc(db, "users", state.user.uid, "meta", "settings");
+      await setDoc(settingsDocRef, payload, { merge: true });
+      showToast("Bases orçamentárias salvas na nuvem!");
     } else {
+      state.settings = payload;
       saveGuestData();
-      showToast("Renda e VR salvos localmente!");
+      recalculateAndRender();
+      showToast("Bases salvas localmente!");
     }
 
-    els.settingsMessage.textContent = "Alterações salvas!";
-    setTimeout(() => {
-      els.settingsMessage.textContent = "";
-    }, 3000);
-
-    recalculateAndRender();
-  } catch (error) {
-    els.settingsMessage.textContent = error.message;
-    els.settingsMessage.style.color = "var(--danger)";
+    els.settingsForm.hidden = true;
+    els.toggleSettingsText.textContent = "Ajustar Bases";
+    els.toggleSettingsIcon.style.transform = "rotate(0deg)";
+  } catch (err) {
+    console.error(err);
+    showAlert(els.settingsMessage, err.message || "Erro ao salvar configurações.");
   }
 }
 
-function toggleSettings() {
-  const isHidden = els.settingsForm.hidden;
-  els.settingsForm.hidden = !isHidden;
-  els.toggleSettingsText.textContent = isHidden ? "Ocultar bases" : "Editar bases";
-  els.toggleSettingsIcon.style.transform = isHidden ? "rotate(180deg)" : "rotate(0deg)";
-}
-
 /* ==========================================================================
-   ENTRY MODAL (ADD / EDIT) - CHIPS & VALIDATION
+   ENTRY TRANSACTIONS (CRUD)
    ========================================================================== */
 
 function openEntryDialog(entry = null) {
-  els.entryForm.reset();
   hideAlert(els.entryMessage);
+  els.entryForm.reset();
+
+  if (entry) {
+    els.entryDialogTitle.textContent = "Editar Lançamento";
+    els.entryForm.id.value = entry.id;
+    els.entryValueInput.value = formatInputMoney(entry.value_cents);
+    els.entryForm.description.value = entry.description;
+    els.entryForm.category.value = entry.category;
+    els.entryForm.date.value = entry.date;
+    els.entryForm.payment_method.value = entry.payment_method;
+    els.entryForm.note.value = entry.note || "";
+    setEntryBudget(entry.budget_type);
+    setEntryKind(entry.entry_kind || "expense");
+    els.deleteEntry.hidden = false;
+  } else {
+    els.entryDialogTitle.textContent = "Novo Lançamento";
+    els.entryForm.id.value = "";
+    els.entryValueInput.value = "";
+    els.entryForm.date.value = toDateInput(new Date());
+    setEntryBudget("needs");
+    setEntryKind("expense");
+    els.deleteEntry.hidden = true;
+  }
+
   els.catPills.forEach((p) => p.classList.remove("active"));
-
-  els.entryDialogTitle.textContent = entry ? "Editar Lançamento" : "Novo Lançamento";
-  els.deleteEntry.hidden = !entry;
-
-  els.entryForm.id.value = entry?.id || "";
-  
-  const initialBudget = entry?.budget_type || (state.currentView in labels && !["overview", "entries"].includes(state.currentView) ? state.currentView : "needs");
-  setEntryBudget(initialBudget);
-
-  const initialKind = entry?.entry_kind || "expense";
-  setEntryKind(initialKind);
-
-  els.entryValueInput.value = entry ? formatInputMoney(entry.value_cents) : "";
-  els.entryForm.description.value = entry?.description || "";
-  els.entryForm.category.value = entry?.category || "";
-  els.entryForm.date.value = entry?.date || toDateInput(new Date());
-  els.entryForm.payment_method.value = entry?.payment_method || (initialBudget === "vr" ? "VR" : "Cartão de Crédito");
-  els.entryForm.note.value = entry?.note || "";
-
   els.entryDialog.showModal();
 }
 
@@ -730,9 +731,10 @@ function setEntryBudget(budget) {
     chip.classList.toggle("active", chip.dataset.budget === budget);
   });
 
-  const isVr = budget === "vr";
-  els.vrKindWrapper.hidden = !isVr;
-  if (!isVr) {
+  if (budget === "vr") {
+    els.vrKindWrapper.hidden = false;
+  } else {
+    els.vrKindWrapper.hidden = true;
     setEntryKind("expense");
   }
 }
@@ -769,6 +771,28 @@ async function handleEntrySubmit(event) {
     const entry_kind = els.hiddenEntryKind.value || "expense";
     const note = (data.note || "").trim();
 
+    const isEdit = Boolean(data.id);
+
+    // Alerta e confirmação de ultrapassagem de teto
+    if (["needs", "wants"].includes(budget_type) && entry_kind === "expense") {
+      const monthKey = monthKeyFromDate(date);
+      const activeCalc = calculateMonth(monthKey);
+      const budget = activeCalc.budgets[budget_type];
+      if (budget) {
+        const currentSpent = budget.spent_cents - (isEdit ? (state.rawEntries.find((e) => e.id === data.id)?.value_cents || 0) : 0);
+        const newRealized = currentSpent + value_cents;
+        if (newRealized > budget.ceiling_cents) {
+          const diff = newRealized - budget.ceiling_cents;
+          const confirmed = await showConfirm(
+            "Ultrapassar teto do orçamento?",
+            `Este lançamento fará ${labels[budget_type]} ultrapassar o teto em ${money(diff)} (Teto: ${money(budget.ceiling_cents)} | Novo total: ${money(newRealized)}). Deseja registrar o déficit?`,
+            "Registrar mesmo assim"
+          );
+          if (!confirmed) return;
+        }
+      }
+    }
+
     const payload = {
       budget_type,
       entry_kind,
@@ -781,21 +805,19 @@ async function handleEntrySubmit(event) {
       updatedAt: new Date().toISOString(),
     };
 
-    const isEdit = Boolean(data.id);
-
     if (state.user) {
       const uid = state.user.uid;
       if (isEdit) {
         const entryRef = doc(db, "users", uid, "entries", data.id);
         await updateDoc(entryRef, payload);
-        showToast("Lançamento atualizado na nuvem!");
+        showToast("Lançamento atualizado!");
       } else {
         payload.createdAt = new Date().toISOString();
-        await addDoc(collection(db, "users", uid, "entries"), payload);
-        showToast("Novo lançamento salvo na nuvem!");
+        const docRef = await addDoc(collection(db, "users", uid, "entries"), payload);
+        payload.id = docRef.id;
+        showToast("Novo lançamento salvo!");
       }
     } else {
-      // LocalStorage fallback for guests / offline
       if (isEdit) {
         const idx = state.rawEntries.findIndex((e) => e.id === data.id);
         if (idx !== -1) state.rawEntries[idx] = { ...state.rawEntries[idx], ...payload };
@@ -810,6 +832,7 @@ async function handleEntrySubmit(event) {
       recalculateAndRender();
     }
 
+    await syncDeficitsForMonth(monthKeyFromDate(date));
     els.entryDialog.close();
   } catch (error) {
     console.error("Erro ao salvar lançamento:", error);
@@ -822,413 +845,841 @@ async function handleEntryDelete() {
   const id = els.entryForm.id.value;
   if (!id) return;
 
-  const confirmed = await showConfirm(
-    "Excluir este lançamento?",
-    "Esta ação removerá a movimentação permanentemente."
-  );
-
+  const confirmed = await showConfirm("Deseja excluir este lançamento?", "Esta movimentação será apagada e os cálculos atualizados.");
   if (!confirmed) return;
 
   try {
-    if (state.user && !id.startsWith("local_")) {
+    const entry = state.rawEntries.find((e) => e.id === id);
+    const monthKey = entry ? monthKeyFromDate(entry.date) : getActiveMonthKey();
+
+    if (state.user) {
       await deleteDoc(doc(db, "users", state.user.uid, "entries", id));
+      showToast("Lançamento excluído!");
     } else {
       state.rawEntries = state.rawEntries.filter((e) => e.id !== id);
       saveGuestData();
       recalculateAndRender();
+      showToast("Lançamento excluído!");
     }
 
+    await syncDeficitsForMonth(monthKey);
     els.entryDialog.close();
-    showToast("Lançamento excluído com sucesso.");
-  } catch (error) {
-    showAlert(els.entryMessage, error.message);
-    showToast(error.message, 3500);
+  } catch (err) {
+    console.error(err);
+    showAlert(els.entryMessage, "Erro ao excluir transação.");
   }
-}
-
-function showConfirm(title, desc) {
-  els.confirmTitle.textContent = title;
-  els.confirmDesc.textContent = desc;
-  els.confirmDialog.showModal();
-  return new Promise((resolve) => {
-    confirmResolve = resolve;
-  });
 }
 
 /* ==========================================================================
-   DATE PRESETS, FILTERS & CALCULATIONS
+   DYNAMIC MONTHLY LOGIC & DEFICITS / TRANSFERS
    ========================================================================== */
 
-function defaultFilters() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { start: toDateInput(start), end: toDateInput(end), search: "" };
+function getActiveMonthKey() {
+  if (state.filters.startDate) return state.filters.startDate.slice(0, 7);
+  return new Date().toISOString().slice(0, 7);
 }
 
-function toDateInput(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function getMonthState(monthKey) {
+  const existing = state.months[monthKey];
+  if (existing) return { ...existing };
+  return {
+    month_key: monthKey,
+    status: "aberto",
+    carry_cents: { needs: 0, wants: 0 },
+    allocation_cents: { needs: 0, wants: 0, savings: 0 },
+    compensation_outflows_cents: { needs: 0, wants: 0 },
+    investment_change_cents: 0,
+    goals_cents: state.settings.budget_goals_cents || { needs: 0, wants: 0 },
+    pending_funds: [],
+  };
 }
 
-function hydrateFilterFields() {
-  els.filtersForm.start.value = state.filters.start;
-  els.filtersForm.end.value = state.filters.end;
-  els.filtersForm.search.value = state.filters.search;
-}
-
-function applyPreset(preset) {
-  state.activePreset = preset;
-  els.presetButtons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.preset === preset);
+function calculateMonth(monthKey) {
+  const monthState = getMonthState(monthKey);
+  const entries = state.rawEntries.filter((entry) => monthKeyFromDate(entry.date) === monthKey);
+  return calculateMonthlyBudget({
+    incomeCents: state.settings.monthly_income_cents,
+    goals: monthState.goals_cents || state.settings.budget_goals_cents || {},
+    entries,
+    carry: monthState.carry_cents || {},
+    allocation: monthState.allocation_cents || {},
+    compensationOutflows: monthState.compensation_outflows_cents || {},
+    investmentChangeCents: monthState.investment_change_cents || 0,
   });
+}
 
-  const now = new Date();
-  let start, end;
-
-  if (preset === "current-month") {
-    start = new Date(now.getFullYear(), now.getMonth(), 1);
-    end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  } else if (preset === "prev-month") {
-    start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    end = new Date(now.getFullYear(), now.getMonth(), 0);
-  } else if (preset === "last-30") {
-    end = new Date();
-    start = new Date();
-    start.setDate(end.getDate() - 30);
-  } else if (preset === "current-year") {
-    start = new Date(now.getFullYear(), 0, 1);
-    end = new Date(now.getFullYear(), 11, 31);
-  }
-
-  if (start && end) {
-    state.filters.start = toDateInput(start);
-    state.filters.end = toDateInput(end);
-    hydrateFilterFields();
-    recalculateAndRender();
+async function persistMonthState(month) {
+  state.months[month.month_key] = month;
+  if (state.user) {
+    await setDoc(doc(db, "users", state.user.uid, "months", month.month_key), month, { merge: true });
+  } else {
+    saveGuestData();
   }
 }
 
-function handleCustomDateChange() {
-  state.activePreset = null;
-  els.presetButtons.forEach((btn) => btn.classList.remove("active"));
-  state.filters.start = els.filtersForm.start.value;
-  state.filters.end = els.filtersForm.end.value;
-  recalculateAndRender();
+async function logTransfer(transfer) {
+  const payload = {
+    ...transfer,
+    createdAt: new Date().toISOString(),
+  };
+  if (state.user) {
+    await addDoc(collection(db, "users", state.user.uid, "transfers"), payload);
+  } else {
+    state.transfers.unshift({ id: `local_tr_${Date.now()}`, ...payload });
+    saveGuestData();
+  }
 }
 
-function handleSearchInput(e) {
-  clearTimeout(searchDebounceTimer);
-  searchDebounceTimer = setTimeout(() => {
-    state.filters.search = e.target.value.trim().toLowerCase();
-    recalculateAndRender();
-  }, 200);
+async function syncDeficitsForMonth(monthKey) {
+  const summary = calculateMonth(monthKey);
+  for (const key of ["needs", "wants"]) {
+    const budget = summary.budgets[key];
+    const deficitId = `${monthKey}_${key}`;
+    const existing = state.deficits.find((d) => d.id === deficitId || (d.month_key === monthKey && d.budget_type === key));
+
+    if (budget.deficit_cents > 0) {
+      const compensated = existing?.compensated_cents || 0;
+      const remaining = Math.max(0, budget.deficit_cents - compensated);
+      const record = {
+        id: deficitId,
+        month_key: monthKey,
+        budget_type: key,
+        amount_cents: budget.deficit_cents,
+        compensated_cents: compensated,
+        remaining_cents: remaining,
+        status: remaining === 0 ? "resolvido" : "pendente",
+        updatedAt: new Date().toISOString(),
+      };
+      if (state.user) {
+        await setDoc(doc(db, "users", state.user.uid, "deficits", deficitId), record, { merge: true });
+      } else {
+        const idx = state.deficits.findIndex((d) => d.id === deficitId);
+        if (idx !== -1) state.deficits[idx] = record;
+        else state.deficits.push(record);
+        saveGuestData();
+      }
+    } else if (existing && existing.status === "pendente") {
+      const record = { ...existing, remaining_cents: 0, status: "resolvido", updatedAt: new Date().toISOString() };
+      if (state.user) {
+        await setDoc(doc(db, "users", state.user.uid, "deficits", existing.id), record, { merge: true });
+      } else {
+        const idx = state.deficits.findIndex((d) => d.id === existing.id);
+        if (idx !== -1) state.deficits[idx] = record;
+        saveGuestData();
+      }
+    }
+  }
 }
 
-/* ==========================================================================
-   50/30/20 & VR FINANCIAL CALCULATION ENGINE
-   ========================================================================== */
+async function compensateDeficit(card) {
+  const deficit = state.deficits.find((item) => item.id === card.dataset.deficitId);
+  const source = card.querySelector("[data-compensation-source]").value;
+  const amount = parseMoney(card.querySelector("[data-compensation-value]").value);
+  const active = calculateMonth(getActiveMonthKey());
 
-function recalculateAndRender() {
-  const { start, end, search } = state.filters;
+  if (!deficit || amount <= 0 || amount > deficit.remaining_cents) return showToast("Informe um valor até o saldo pendente.");
+  if (amount > active.budgets[source].remaining_cents) return showToast("A origem escolhida não possui saldo disponível suficiente.");
 
-  // Filter entries based on date range and search term
-  state.filteredEntries = state.rawEntries.filter((entry) => {
-    if (start && entry.date < start) return false;
-    if (end && entry.date > end) return false;
-    if (search) {
-      const matchDesc = (entry.description || "").toLowerCase().includes(search);
-      const matchCat = (entry.category || "").toLowerCase().includes(search);
-      const matchMethod = (entry.payment_method || "").toLowerCase().includes(search);
-      if (!matchDesc && !matchCat && !matchMethod) return false;
-    }
-    return true;
-  });
+  const confirmed = await showConfirm(
+    "Compensar pendência?",
+    `${money(amount)} sairão do saldo disponível de ${labels[source]}. Investimentos não participam desta operação.`,
+    "Confirmar compensação"
+  );
+  if (!confirmed) return;
 
-  // Calculate 50/30/20 & VR
-  const incomeCents = state.settings.monthly_income_cents || 0;
-  const vrInitialCents = state.settings.vr_initial_balance_cents || 0;
-
-  const plannedNeeds = Math.round(incomeCents * 0.5);
-  const plannedWants = Math.round(incomeCents * 0.3);
-  const plannedSavings = Math.round(incomeCents * 0.2);
-
-  let spentNeeds = 0;
-  let spentWants = 0;
-  let spentSavings = 0;
-  let vrPeriodSpent = 0;
-  let vrPeriodReceived = 0;
-
-  // Aggregate period entries
-  state.filteredEntries.forEach((entry) => {
-    if (entry.budget_type === "needs" && entry.entry_kind === "expense") spentNeeds += entry.value_cents;
-    else if (entry.budget_type === "wants" && entry.entry_kind === "expense") spentWants += entry.value_cents;
-    else if (entry.budget_type === "savings" && entry.entry_kind === "expense") spentSavings += entry.value_cents;
-    else if (entry.budget_type === "vr") {
-      if (entry.entry_kind === "expense") vrPeriodSpent += entry.value_cents;
-      else if (entry.entry_kind === "income") vrPeriodReceived += entry.value_cents;
-    }
-  });
-
-  // Aggregate all-time VR balance
-  let vrAllSpent = 0;
-  let vrAllReceived = 0;
-  state.rawEntries.forEach((entry) => {
-    if (entry.budget_type === "vr") {
-      if (entry.entry_kind === "expense") vrAllSpent += entry.value_cents;
-      else if (entry.entry_kind === "income") vrAllReceived += entry.value_cents;
-    }
-  });
-  const vrBalanceCents = vrInitialCents + vrAllReceived - vrAllSpent;
-
-  const totalSpentCents = spentNeeds + spentWants + spentSavings;
-  const availableCents = incomeCents - totalSpentCents;
-
-  state.summary = {
-    settings: state.settings,
-    totals: {
-      spent_cents: totalSpentCents,
-      available_cents: availableCents,
-    },
-    budgets: {
-      needs: {
-        planned_cents: plannedNeeds,
-        spent_cents: spentNeeds,
-        remaining_cents: plannedNeeds - spentNeeds,
-        usage_percent: plannedNeeds > 0 ? (spentNeeds / plannedNeeds) * 100 : 0,
-      },
-      wants: {
-        planned_cents: plannedWants,
-        spent_cents: spentWants,
-        remaining_cents: plannedWants - spentWants,
-        usage_percent: plannedWants > 0 ? (spentWants / plannedWants) * 100 : 0,
-      },
-      savings: {
-        planned_cents: plannedSavings,
-        spent_cents: spentSavings,
-        remaining_cents: plannedSavings - spentSavings,
-        usage_percent: plannedSavings > 0 ? (spentSavings / plannedSavings) * 100 : 0,
-      },
-    },
-    vr: {
-      initial_cents: vrInitialCents,
-      received_cents: vrPeriodReceived,
-      spent_cents: vrPeriodSpent,
-      period_spent_cents: vrPeriodSpent,
-      balance_cents: vrBalanceCents,
-    },
+  const month = getMonthState(getActiveMonthKey());
+  month.compensation_outflows_cents = {
+    ...(month.compensation_outflows_cents || {}),
+    [source]: (month.compensation_outflows_cents?.[source] || 0) + amount,
   };
 
-  render();
+  const updatedDeficit = {
+    ...deficit,
+    compensated_cents: (deficit.compensated_cents || 0) + amount,
+    remaining_cents: deficit.remaining_cents - amount,
+    status: deficit.remaining_cents === amount ? "resolvido" : "pendente",
+    updatedAt: new Date().toISOString(),
+  };
+
+  await persistMonthState(month);
+  if (state.user) {
+    await setDoc(doc(db, "users", state.user.uid, "deficits", deficit.id), updatedDeficit, { merge: true });
+  } else {
+    state.deficits = state.deficits.map((item) => (item.id === deficit.id ? updatedDeficit : item));
+    saveGuestData();
+  }
+
+  await logTransfer({
+    type: "compensacao_deficit",
+    source,
+    destination: deficit.budget_type,
+    amount_cents: amount,
+    month_key: getActiveMonthKey(),
+    reference_month_key: deficit.month_key,
+    deficit_id: deficit.id,
+    reason: "Compensação de déficit",
+  });
+
+  recalculateAndRender();
+  showToast("Compensação registrada no histórico.");
+}
+
+async function allocateFund(card, equalSplit = false) {
+  const monthKey = getActiveMonthKey();
+  const month = getMonthState(monthKey);
+  const fund = (month.pending_funds || []).find((item) => item.id === card.dataset.fundId);
+  if (!fund) return;
+
+  const target = card.querySelector("[data-fund-target]")?.value || "savings";
+  const amount = equalSplit ? fund.remaining_cents : parseMoney(card.querySelector("[data-fund-value]").value);
+
+  if (amount <= 0 || amount > fund.remaining_cents) return showToast("Informe um valor até o saldo disponível desta sobra.");
+
+  const confirmed = await showConfirm(
+    "Direcionar saldo disponível?",
+    `${money(amount)} serão enviados para ${target.startsWith("goal:") ? "o objetivo selecionado" : labels[target]}. A movimentação ficará registrada.`,
+    "Confirmar direcionamento"
+  );
+  if (!confirmed) return;
+
+  if (equalSplit) {
+    const distribution = splitEqually(amount, BUDGET_KEYS);
+    for (const [key, value] of Object.entries(distribution)) {
+      await applyFundTarget(month, fund, key, value);
+    }
+  } else {
+    await applyFundTarget(month, fund, target, amount);
+  }
+
+  fund.remaining_cents -= amount;
+  month.pending_funds = month.pending_funds.filter((item) => item.remaining_cents > 0);
+  await persistMonthState(month);
+  recalculateAndRender();
+  showToast("Saldo direcionado e registrado no histórico.");
+}
+
+async function applyFundTarget(month, fund, target, amount) {
+  if (target.startsWith("goal:")) {
+    const goalId = target.slice(5);
+    const goal = state.goals.find((item) => item.id === goalId);
+    if (!goal) throw new Error("Objetivo não encontrado.");
+    const updated = {
+      ...goal,
+      current_cents: (goal.current_cents || 0) + amount,
+      updatedAt: new Date().toISOString(),
+    };
+    if (state.user) {
+      await setDoc(doc(db, "users", state.user.uid, "goals", goal.id), updated, { merge: true });
+    } else {
+      state.goals = state.goals.map((item) => (item.id === goal.id ? updated : item));
+    }
+  } else {
+    month.allocation_cents = {
+      ...(month.allocation_cents || {}),
+      [target]: (month.allocation_cents?.[target] || 0) + amount,
+    };
+  }
+
+  await logTransfer({
+    type: fund.type,
+    source: fund.source_label,
+    destination: target,
+    amount_cents: amount,
+    month_key: month.month_key,
+    reference_month_key: fund.source_month,
+    reason: "Redistribuição autorizada",
+  });
+}
+
+async function splitFund(card) {
+  return allocateFund(card, true);
+}
+
+async function closeCurrentMonth() {
+  const monthKey = getActiveMonthKey();
+  const current = getMonthState(monthKey);
+  if (current.status === "fechado") return;
+
+  const confirmed = await showConfirm(
+    "Fechar este mês?",
+    "O FinFlow registrará sobras, economias, pendências e o troco de investimentos para o próximo mês. Nenhuma transferência será feita automaticamente.",
+    "Fechar mês"
+  );
+  if (!confirmed) return;
+
+  const summary = calculateMonth(monthKey);
+  const [year, month] = monthKey.split("-").map(Number);
+  const nextKey = `${year + (month === 12 ? 1 : 0)}-${String(month === 12 ? 1 : month + 1).padStart(2, "0")}`;
+
+  const funds = ["needs", "wants"].flatMap((key) => {
+    const budget = summary.budgets[key];
+    const output = [];
+    if (budget.surplus_cents > 0) {
+      output.push({
+        id: `${monthKey}-${key}-sobra`,
+        type: "sobra",
+        source_label: labels[key],
+        source_month: monthKey,
+        remaining_cents: budget.surplus_cents,
+      });
+    }
+    if (budget.savings_cents > 0) {
+      output.push({
+        id: `${monthKey}-${key}-economia`,
+        type: "economia",
+        source_label: `Economia em ${labels[key]}`,
+        source_month: monthKey,
+        remaining_cents: budget.savings_cents,
+      });
+    }
+    return output;
+  });
+
+  const next = getMonthState(nextKey);
+  next.investment_change_cents = (next.investment_change_cents || 0) + summary.budgets.savings.investment_change_cents;
+  next.pending_funds = [
+    ...(next.pending_funds || []),
+    ...funds.filter((fund) => !(next.pending_funds || []).some((item) => item.id === fund.id)),
+  ];
+
+  current.status = "fechado";
+  current.closed_summary = { ...summary, closedAt: new Date().toISOString() };
+
+  await persistMonthState(current);
+  await persistMonthState(next);
+  await logTransfer({
+    type: "fechamento_mensal",
+    source: monthKey,
+    destination: nextKey,
+    amount_cents: summary.budgets.savings.investment_change_cents,
+    month_key: monthKey,
+    reason: "Troco de investimentos transportado",
+  });
+
+  recalculateAndRender();
+  showToast("Mês fechado. Sobras e troco estão prontos para o próximo período.");
+}
+
+/* ==========================================================================
+   GOALS LOGIC & WORKSPACE
+   ========================================================================== */
+
+function goalOptions() {
+  return state.goals
+    .filter((goal) => goal.status !== "arquivado")
+    .map((goal) => `<option value="goal:${goal.id}">${escapeHtml(goal.name)}</option>`)
+    .join("");
+}
+
+function statusLabel(status) {
+  const map = {
+    atingido: "Atingido",
+    adiantado: "Adiantado",
+    no_ritmo: "No ritmo",
+    abaixo_do_ritmo: "Abaixo do ritmo",
+    atrasado: "Atrasado",
+    sem_prazo: "Sem prazo",
+  };
+  return map[status] || status;
+}
+
+async function handleGoalSubmit(event) {
+  event.preventDefault();
+  const form = new FormData(els.goalsForm);
+  const name = String(form.get("name") || "").trim();
+  const target_cents = parseMoney(form.get("target"));
+  if (!name || target_cents <= 0) return showToast("Informe nome e valor-alvo maior que zero.");
+
+  const goal = {
+    name,
+    type: String(form.get("type") || "").trim(),
+    target_cents,
+    current_cents: parseMoney(form.get("current")),
+    start_date: form.get("start") || new Date().toISOString().slice(0, 10),
+    due_date: form.get("due") || "",
+    desired_contribution_cents: parseMoney(form.get("contribution")),
+    priority: form.get("priority") || "normal",
+    description: String(form.get("description") || "").trim(),
+    status: "ativo",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (state.user) {
+    await addDoc(collection(db, "users", state.user.uid, "goals"), goal);
+  } else {
+    state.goals.push({ id: `local_goal_${Date.now()}`, ...goal });
+    saveGuestData();
+    recalculateAndRender();
+  }
+
+  els.goalsForm.reset();
+  showToast("Objetivo financeiro cadastrado!");
+}
+
+function renderGoals() {
+  if (!els.goalsList) return;
+  if (!state.goals.length) {
+    els.goalsList.innerHTML = `
+      <div class="chart-empty-state" style="grid-column: 1 / -1;">
+        <div class="chart-empty-icon" aria-hidden="true">+</div>
+        <strong>Seu primeiro objetivo começa aqui</strong>
+        <span>Crie uma meta financeira com valor, prazo e prioridade para acompanhar seu ritmo de aportes.</span>
+      </div>`;
+    return;
+  }
+
+  els.goalsList.innerHTML = state.goals
+    .filter((goal) => goal.status !== "arquivado")
+    .map((goal) => {
+      const info = calculateGoalStatus(goal);
+      return `
+        <article class="goal-card">
+          <div class="goal-card-head">
+            <div>
+              <h3>${escapeHtml(goal.name)}</h3>
+              <p>${escapeHtml(goal.type || "Objetivo financeiro")}</p>
+            </div>
+            <span class="status-badge status-${info.status}">${statusLabel(info.status)}</span>
+          </div>
+          <div class="goal-amounts">
+            <strong>${money(goal.current_cents || 0)}</strong>
+            <span>de ${money(goal.target_cents || 0)}</span>
+          </div>
+          <div class="goal-progress-track">
+            <div class="goal-progress-fill" style="width:${Math.min(100, info.progress).toFixed(2)}%"></div>
+          </div>
+          <div class="goal-meta">
+            <div>
+              <span>Progresso</span>
+              <strong>${info.progress.toFixed(1)}%</strong>
+            </div>
+            <div>
+              <span>Falta</span>
+              <strong>${money(info.remaining)}</strong>
+            </div>
+            <div>
+              <span>${goal.due_date ? "Aporte necessário" : "Aporte desejado"}</span>
+              <strong>${money(info.requiredMonthly || goal.desired_contribution_cents || 0)}/mês</strong>
+            </div>
+          </div>
+        </article>`;
+    })
+    .join("");
+}
+
+function renderDynamicWorkspace() {
+  if (!els.dynamicWorkspace) return;
+  const monthKey = getActiveMonthKey();
+  const summary = calculateMonth(monthKey);
+  const monthState = getMonthState(monthKey);
+  const openDeficits = state.deficits.filter((d) => d.status === "pendente" && d.remaining_cents > 0);
+  const pendingFunds = monthState.pending_funds || [];
+
+  const ledgerRows = BUDGET_KEYS.map((key) => {
+    const budget = summary.budgets[key];
+    const isOver = budget.deficit_cents > 0;
+    return `
+      <div class="budget-ledger-row">
+        <div class="ledger-name">
+          <span class="ledger-dot" style="background:${colors[key]}"></span>
+          ${labels[key].split(" ")[0]}
+        </div>
+        <div class="ledger-value">
+          <span>Teto</span>
+          <strong>${money(budget.ceiling_cents)}</strong>
+        </div>
+        <div class="ledger-value">
+          <span>Meta</span>
+          <strong>${budget.target_cents ? money(budget.target_cents) : "-"}</strong>
+        </div>
+        <div class="ledger-value">
+          <span>Gasto</span>
+          <strong>${money(budget.realized_cents || budget.spent_cents)}</strong>
+        </div>
+        <div class="ledger-value ${isOver ? "negative" : "positive"}">
+          <span>Saldo</span>
+          <strong>${isOver ? `-${money(budget.deficit_cents)}` : money(budget.remaining_cents)}</strong>
+        </div>
+        <div class="ledger-value">
+          <span>Uso</span>
+          <strong>${budget.usage_percent.toFixed(1)}%</strong>
+        </div>
+      </div>`;
+  }).join("");
+
+  const noticesHtml = openDeficits.length
+    ? `<div class="notice-list">
+        ${openDeficits
+          .map(
+            (deficit) => `
+            <div class="notice-card deficit" data-deficit-id="${deficit.id}">
+              <div class="notice-title">
+                <span class="status-badge status-atrasado">Pendência aberta</span>
+                ${labels[deficit.budget_type]} ultrapassou o teto
+              </div>
+              <p class="notice-copy">
+                Faltam <strong>${money(deficit.remaining_cents)}</strong> para compensar o limite. 
+                Investimentos permanecem protegidos e não podem ser usados.
+              </p>
+              <div class="compensation-form">
+                <select data-compensation-source aria-label="Origem da compensação">
+                  ${["needs", "wants"]
+                    .filter((k) => k !== deficit.budget_type)
+                    .map((k) => `<option value="${k}">${labels[k]} (${money(summary.budgets[k].remaining_cents)} disp.)</option>`)
+                    .join("")}
+                </select>
+                <input data-compensation-value inputmode="numeric" placeholder="${formatInputMoney(deficit.remaining_cents)}" value="${formatInputMoney(deficit.remaining_cents)}">
+                <button class="btn btn-secondary btn-sm" type="button" data-action="compensate">Compensar</button>
+              </div>
+            </div>`
+          )
+          .join("")}
+      </div>`
+    : `<p class="dynamic-desc">Nenhuma pendência orçamentária neste período. Gastos dentro dos limites.</p>`;
+
+  const fundsHtml = pendingFunds.length
+    ? `<div class="fund-list">
+        ${pendingFunds
+          .map(
+            (fund) => `
+            <div class="fund-row" data-fund-id="${fund.id}">
+              <div class="fund-title">
+                <span class="fund-type">${fund.type === "economia" ? "Economia" : "Sobra"}</span>
+                ${fund.source_label} (${money(fund.remaining_cents)})
+              </div>
+              <p class="fund-copy">Saldo liberado do período ${fund.source_month}. Escolha o direcionamento autorizado:</p>
+              <div class="fund-actions">
+                <select data-fund-target aria-label="Destino">
+                  <option value="savings">Investimentos (20%)</option>
+                  <option value="needs">Necessidades (50%)</option>
+                  <option value="wants">Desejos (30%)</option>
+                  ${goalOptions()}
+                </select>
+                <input data-fund-value inputmode="numeric" value="${formatInputMoney(fund.remaining_cents)}">
+                <button class="btn btn-primary btn-sm" type="button" data-action="allocate">Direcionar</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-action="split">Dividir (33/33/33)</button>
+              </div>
+            </div>`
+          )
+          .join("")}
+      </div>`
+    : `<p class="dynamic-desc">Nenhum saldo pendente de direcionamento para este mês.</p>`;
+
+  const hasRelevantGoal = state.goals.some((g) => ["abaixo_do_ritmo", "atrasado"].includes(calculateGoalStatus(g).status));
+  const recHtml = hasRelevantGoal
+    ? `<div class="recommendation-list">
+        <div class="recommendation-card">
+          <strong>Recomendação Inteligente:</strong>
+          <p>Você possui objetivos abaixo do ritmo. Ao receber sobras de orçamento, priorize o aporte na meta para manter o prazo planejado.</p>
+        </div>
+      </div>`
+    : "";
+
+  els.dynamicWorkspace.innerHTML = `
+    <article class="dynamic-panel dynamic-panel-wide">
+      <div class="dynamic-panel-head">
+        <div>
+          <h2 class="dynamic-title">Execução Orçamentária Dinâmica</h2>
+          <p class="dynamic-desc">Teto planejado, metas de economia e disciplina da metodologia 50/30/20.</p>
+        </div>
+        <span class="month-label">Competência ${monthKey}</span>
+      </div>
+      <div class="budget-ledger">${ledgerRows}</div>
+      <div class="investment-commitment" style="margin-top: 16px;">
+        <div class="dynamic-title">Compromisso de Investimentos (20% Protegido)</div>
+        <div class="commitment-grid">
+          <div><span>Obrigatório (20%)</span><strong>${money(summary.budgets.savings.mandatory_cents)}</strong></div>
+          <div><span>Troco transportado</span><strong>${money(summary.budgets.savings.carried_change_cents)}</strong></div>
+          <div><span>Total disponível</span><strong>${money(summary.budgets.savings.ceiling_cents)}</strong></div>
+          <div><span>Aportado</span><strong>${money(summary.budgets.savings.spent_cents)}</strong></div>
+          <div><span>Troco acumulado</span><strong style="color:var(--color-savings)">${money(summary.budgets.savings.investment_change_cents)}</strong></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="dynamic-panel">
+      <div class="dynamic-panel-head">
+        <div>
+          <h2 class="dynamic-title">Pendências e Compensações</h2>
+          <p class="dynamic-desc">Déficits requerem compensação entre Necessidades e Desejos.</p>
+        </div>
+      </div>
+      ${noticesHtml}
+    </article>
+
+    <article class="dynamic-panel">
+      <div class="dynamic-panel-head">
+        <div>
+          <h2 class="dynamic-title">Sobras & Decisões de Saldo</h2>
+          <p class="dynamic-desc">Redistribuição deliberada de economias para investimentos ou objetivos.</p>
+        </div>
+      </div>
+      ${fundsHtml}
+      ${recHtml}
+    </article>
+
+    <article class="dynamic-panel dynamic-panel-wide">
+      <div class="month-close-bar">
+        <div>
+          <h2 class="dynamic-title">Fechamento do Mês</h2>
+          <p>Consolida o período, transporta o troco de investimentos e disponibiliza as sobras para o próximo mês.</p>
+        </div>
+        <button class="btn btn-secondary" type="button" id="close-month-btn">Fechar Mês ${monthKey}</button>
+      </div>
+    </article>`;
+
+  // Listeners dinâmicos
+  els.dynamicWorkspace.querySelectorAll('[data-action="compensate"]').forEach((btn) => {
+    btn.addEventListener("click", () => compensateDeficit(btn.closest(".notice-card")));
+  });
+  els.dynamicWorkspace.querySelectorAll('[data-action="allocate"]').forEach((btn) => {
+    btn.addEventListener("click", () => allocateFund(btn.closest(".fund-row"), false));
+  });
+  els.dynamicWorkspace.querySelectorAll('[data-action="split"]').forEach((btn) => {
+    btn.addEventListener("click", () => splitFund(btn.closest(".fund-row")));
+  });
+  els.dynamicWorkspace.querySelector("#close-month-btn")?.addEventListener("click", closeCurrentMonth);
 }
 
 /* ==========================================================================
    RENDERERS & VIEWS
-   ========================================================================= */
+   ========================================================================== */
 
 function setView(view) {
   state.currentView = view;
 
-  // Update navigation items (Desktop & Mobile)
+  // Update active state in sidebar and bottom navigation
   document.querySelectorAll("[data-view]").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === view);
   });
 
   // Switch active panel
   document.querySelectorAll(".view-panel").forEach((panel) => panel.classList.remove("active"));
-  const targetId = view === "overview" ? "overview-view" : view === "entries" ? "entries-view" : "category-view";
+  const targetId =
+    view === "overview"
+      ? "overview-view"
+      : view === "entries"
+      ? "entries-view"
+      : view === "goals"
+      ? "goals-view"
+      : "category-view";
   const targetPanel = document.querySelector(`#${targetId}`);
   if (targetPanel) targetPanel.classList.add("active");
 
-  // Update Desktop & Mobile Header Titles
-  const viewTitle = labels[view] || "Visão Geral";
-  const viewSubtitle = viewSubtitles[view] || "";
-  text("#view-title", viewTitle);
-  text("#view-subtitle", viewSubtitle);
-  if (els.mobileViewTitle) text("#mobile-view-title", viewTitle);
-  if (els.mobileViewSubtitle) text("#mobile-view-subtitle", viewSubtitle);
+  // Update Headings
+  const titleText = labels[view] || "FinFlow";
+  const subText = viewSubtitles[view] || "";
+
+  text("#page-main-title", titleText);
+  text("#page-main-subtitle", subText);
+  if (els.mobileViewTitle) els.mobileViewTitle.textContent = titleText;
+  if (els.mobileViewSubtitle) els.mobileViewSubtitle.textContent = subText;
 
   render();
 }
 
 function render() {
-  if (!state.summary) return;
+  if (!state.summary) recalculateSummary();
 
   // Sync settings inputs
   els.settingsForm.monthly_income.value = formatInputMoney(state.settings.monthly_income_cents);
   els.settingsForm.vr_initial.value = formatInputMoney(state.settings.vr_initial_balance_cents);
+  if (els.settingsForm.needs_goal) els.settingsForm.needs_goal.value = formatInputMoney(state.settings.budget_goals_cents?.needs || 0);
+  if (els.settingsForm.wants_goal) els.settingsForm.wants_goal.value = formatInputMoney(state.settings.budget_goals_cents?.wants || 0);
 
   renderMetrics();
   renderBudgetBars();
   renderCharts();
   renderEntries();
+  renderDynamicWorkspace();
+  renderGoals();
 
-  if (!["overview", "entries"].includes(state.currentView)) {
+  if (!["overview", "entries", "goals"].includes(state.currentView)) {
     renderCategory(state.currentView);
   }
 }
 
-function renderMetrics() {
-  const summary = state.summary;
-  text("#metric-income", money(summary.settings.monthly_income_cents));
-  text("#metric-spent", money(summary.totals.spent_cents));
-  text("#metric-available", money(summary.totals.available_cents));
-  text("#metric-vr", money(summary.vr.balance_cents));
+function recalculateAndRender() {
+  recalculateSummary();
+  filterEntries();
+  render();
+}
 
-  const spentPct = summary.settings.monthly_income_cents > 0
-    ? ((summary.totals.spent_cents / summary.settings.monthly_income_cents) * 100).toFixed(1)
-    : 0;
-  text("#metric-spent-pct", `${spentPct}% da renda comprometida`);
+function recalculateSummary() {
+  const income = state.settings.monthly_income_cents || 0;
+  const vrInitial = state.settings.vr_initial_balance_cents || 0;
+
+  const planned = budgetFromIncome(income);
+
+  const spent = { needs: 0, wants: 0, savings: 0 };
+  let vrSpent = 0;
+  let vrReceived = 0;
+
+  state.filteredEntries.forEach((entry) => {
+    const val = entry.value_cents || 0;
+    if (entry.budget_type === "vr") {
+      if (entry.entry_kind === "income") vrReceived += val;
+      else vrSpent += val;
+    } else if (BUDGET_KEYS.includes(entry.budget_type)) {
+      if (entry.entry_kind === "expense") {
+        spent[entry.budget_type] += val;
+      }
+    }
+  });
+
+  const totalSpent503020 = spent.needs + spent.wants + spent.savings;
+  const available503020 = income - totalSpent503020;
+  const vrBalance = vrInitial + vrReceived - vrSpent;
+
+  const buildBudget = (key) => {
+    const p = planned[key];
+    const s = spent[key];
+    const rem = p - s;
+    const usage = p > 0 ? (s / p) * 100 : 0;
+    return {
+      planned_cents: p,
+      spent_cents: s,
+      remaining_cents: rem,
+      usage_percent: usage,
+    };
+  };
+
+  state.summary = {
+    income_cents: income,
+    spent_total_cents: totalSpent503020,
+    available_cents: available503020,
+    budgets: {
+      needs: buildBudget("needs"),
+      wants: buildBudget("wants"),
+      savings: buildBudget("savings"),
+    },
+    vr: {
+      initial_cents: vrInitial,
+      received_cents: vrReceived,
+      spent_cents: vrSpent,
+      balance_cents: vrBalance,
+    },
+  };
+}
+
+function renderMetrics() {
+  const s = state.summary;
+  text("#metric-income", money(s.income_cents));
+  text("#metric-spent", money(s.spent_total_cents));
+
+  const availEl = document.querySelector("#metric-available");
+  if (availEl) {
+    availEl.textContent = money(s.available_cents);
+    availEl.className = `metric-value ${s.available_cents >= 0 ? "text-available" : "text-spent"}`;
+  }
+
+  const vrEl = document.querySelector("#metric-vr-balance");
+  if (vrEl) {
+    vrEl.textContent = money(s.vr.balance_cents);
+    vrEl.className = `metric-value ${s.vr.balance_cents >= 0 ? "text-available" : "text-spent"}`;
+  }
 }
 
 function renderBudgetBars() {
-  const container = document.querySelector("#budget-bars");
-  container.innerHTML = "";
-
-  const keys = [
-    { key: "needs", name: "50% Necessidades (Essencial)", fillClass: "fill-needs" },
-    { key: "wants", name: "30% Desejos (Estilo / Lazer)", fillClass: "fill-wants" },
-    { key: "savings", name: "20% Investimentos / Reserva", fillClass: "fill-savings" },
-  ];
-
-  keys.forEach(({ key, name, fillClass }) => {
+  BUDGET_KEYS.forEach((key) => {
     const budget = state.summary.budgets[key];
-    const pct = Math.min(budget.usage_percent, 100);
-    const isOver = budget.spent_cents > budget.planned_cents;
-    const isNear = budget.usage_percent >= 85 && !isOver;
-    const statusClass = isOver ? "status-over" : isNear ? "status-near" : "";
+    text(`#bar-${key}-values`, `${money(budget.spent_cents)} / ${money(budget.planned_cents)}`);
+    text(`#bar-${key}-pct`, `${budget.usage_percent.toFixed(1)}%`);
 
-    container.insertAdjacentHTML(
-      "beforeend",
-      `<div class="budget-bar-item">
-        <div class="budget-bar-header">
-          <div class="budget-bar-name">
-            <span class="nav-dot dot-${key}"></span>
-            <span>${name}</span>
-          </div>
-          <div class="budget-bar-values">${money(budget.spent_cents)} de ${money(budget.planned_cents)}</div>
-        </div>
-        <div class="progress-track">
-          <div class="progress-fill ${fillClass} ${statusClass}" style="width: ${pct}%"></div>
-        </div>
-        <div class="budget-bar-footer">
-          <span>${budget.usage_percent.toFixed(1)}% utilizado</span>
-          <span>${isOver ? 'Excedido em ' + money(budget.spent_cents - budget.planned_cents) : 'Saldo restante: ' + money(budget.remaining_cents)}</span>
-        </div>
-      </div>`
-    );
+    const fillEl = document.querySelector(`#fill-${key}`);
+    if (fillEl) {
+      const widthPct = Math.min(budget.usage_percent, 100);
+      fillEl.style.width = `${widthPct}%`;
+      fillEl.classList.toggle("status-over", budget.usage_percent > 100);
+    }
   });
 }
 
-function renderCharts() {
-  try {
-    renderDistributionChart();
-  } catch (err) {
-    console.error("Erro ao renderizar Gráfico de Distribuição:", err);
-  }
+/* ==========================================================================
+   PURE SVG CHARTS (NO EXTERNAL DEPENDENCIES)
+   ========================================================================== */
 
-  try {
-    renderTimelineChart();
-  } catch (err) {
-    console.error("Erro ao renderizar Gráfico de Evolução:", err);
-  }
+function renderCharts() {
+  renderDistributionChart();
+  renderTimelineChart();
 }
 
 function renderDistributionChart() {
   const container = document.querySelector("#distribution-chart-wrap");
   if (!container) return;
 
-  const items = [
-    { key: "needs", label: labels.needs, color: colors.needs, value: state.summary?.budgets?.needs?.spent_cents || 0 },
-    { key: "wants", label: labels.wants, color: colors.wants, value: state.summary?.budgets?.wants?.spent_cents || 0 },
-    { key: "savings", label: labels.savings, color: colors.savings, value: state.summary?.budgets?.savings?.spent_cents || 0 },
-    { key: "vr", label: labels.vr, color: colors.vr, value: state.summary?.vr?.period_spent_cents || 0 },
-  ];
+  const { spent_total_cents } = state.summary;
+  const budgets = state.summary.budgets;
 
-  const total = items.reduce((sum, item) => sum + item.value, 0);
-
-  if (!total) {
+  if (spent_total_cents === 0) {
     container.innerHTML = `
       <div class="chart-empty-state">
         <div class="chart-empty-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
-            <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 6v6l4 2"></path>
           </svg>
         </div>
-        <strong>Sem gastos no período</strong>
-        <span>Adicione despesas neste mês para visualizar a divisão percentual dos seus gastos.</span>
+        <strong>Sem despesas registradas</strong>
+        <span>Adicione lançamentos para visualizar o gráfico de distribuição 50/30/20.</span>
       </div>`;
     return;
   }
 
-  // Geração das fatias do Donut em SVG vetorial de alta definição
-  const size = 200;
-  const cx = 100;
-  const cy = 100;
-  const rOuter = 82;
-  const rInner = 54;
+  const slices = [
+    { key: "needs", label: "50% Necessidades", value: budgets.needs.spent_cents, color: colors.needs },
+    { key: "wants", label: "30% Desejos", value: budgets.wants.spent_cents, color: colors.wants },
+    { key: "savings", label: "20% Investimentos", value: budgets.savings.spent_cents, color: colors.savings },
+  ].filter((s) => s.value > 0);
 
-  let currentAngle = -Math.PI / 2;
-  const paths = [];
+  const size = 180;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 70;
+  const strokeWidth = 22;
+  const circ = 2 * Math.PI * r;
 
-  items.forEach((item) => {
-    if (!item.value) return;
-    const sliceAngle = (item.value / total) * Math.PI * 2;
-    const endAngle = currentAngle + sliceAngle;
+  let accOffset = 0;
+  const svgArcs = slices
+    .map((s) => {
+      const ratio = s.value / spent_total_cents;
+      const dash = ratio * circ;
+      const offset = -accOffset;
+      accOffset += dash;
+      return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${strokeWidth}" stroke-dasharray="${dash.toFixed(2)} ${circ.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}" stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})" />`;
+    })
+    .join("");
 
-    const x1Outer = cx + rOuter * Math.cos(currentAngle);
-    const y1Outer = cy + rOuter * Math.sin(currentAngle);
-    const x2Outer = cx + rOuter * Math.cos(endAngle);
-    const y2Outer = cy + rOuter * Math.sin(endAngle);
-
-    const x1Inner = cx + rInner * Math.cos(endAngle);
-    const y1Inner = cy + rInner * Math.sin(endAngle);
-    const x2Inner = cx + rInner * Math.cos(currentAngle);
-    const y2Inner = cy + rInner * Math.sin(currentAngle);
-
-    const largeArc = sliceAngle > Math.PI ? 1 : 0;
-
-    const d = [
-      `M ${x1Outer.toFixed(2)} ${y1Outer.toFixed(2)}`,
-      `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${x2Outer.toFixed(2)} ${y2Outer.toFixed(2)}`,
-      `L ${x1Inner.toFixed(2)} ${y1Inner.toFixed(2)}`,
-      `A ${rInner} ${rInner} 0 ${largeArc} 0 ${x2Inner.toFixed(2)} ${y2Inner.toFixed(2)}`,
-      "Z",
-    ].join(" ");
-
-    paths.push(`<path d="${d}" fill="${item.color}" class="donut-slice" />`);
-    currentAngle = endAngle;
-  });
-
-  const legendHtml = items
-    .map((item) => {
-      const pct = total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
+  const legendItems = slices
+    .map((s) => {
+      const pct = ((s.value / spent_total_cents) * 100).toFixed(1);
       return `
-        <div class="donut-legend-item">
-          <div class="donut-legend-left">
-            <span class="donut-legend-dot" style="background:${item.color}"></span>
-            <span class="donut-legend-name">${escapeHtml(item.label)}</span>
-            <span class="donut-legend-pct">${pct}%</span>
-          </div>
-          <strong class="donut-legend-val">${money(item.value)}</strong>
-        </div>`;
+      <div class="donut-legend-item">
+        <div class="donut-legend-left">
+          <span class="donut-legend-dot" style="background-color:${s.color}"></span>
+          <span class="donut-legend-name">${s.label}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="donut-legend-pct">${pct}%</span>
+          <span class="donut-legend-val">${money(s.value)}</span>
+        </div>
+      </div>`;
     })
     .join("");
 
   container.innerHTML = `
     <div class="donut-layout-wrap">
       <div class="donut-svg-wrap">
-        <svg viewBox="0 0 ${size} ${size}" class="donut-svg" aria-label="Gráfico de Distribuição">
-          ${paths.join("")}
-          <text x="${cx}" y="${cy - 7}" text-anchor="middle" class="donut-center-label">TOTAL GASTO</text>
-          <text x="${cx}" y="${cy + 13}" text-anchor="middle" class="donut-center-val">${money(total)}</text>
+        <svg viewBox="0 0 ${size} ${size}" class="donut-svg" aria-label="Distribuição de Gastos">
+          <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="${strokeWidth}" />
+          ${svgArcs}
+          <text x="${cx}" y="${cy - 6}" text-anchor="middle" class="donut-center-label">TOTAL GASTO</text>
+          <text x="${cx}" y="${cy + 14}" text-anchor="middle" class="donut-center-val">${money(spent_total_cents)}</text>
         </svg>
       </div>
       <div class="donut-legend-grid">
-        ${legendHtml}
+        ${legendItems}
       </div>
     </div>`;
 }
@@ -1238,7 +1689,7 @@ function renderTimelineChart() {
   if (!container) return;
 
   const expenses = state.filteredEntries
-    .filter((entry) => entry.entry_kind === "expense")
+    .filter((e) => e.entry_kind === "expense" && e.budget_type !== "vr")
     .sort((a, b) => a.date.localeCompare(b.date));
 
   if (!expenses.length) {
@@ -1246,54 +1697,49 @@ function renderTimelineChart() {
       <div class="chart-empty-state">
         <div class="chart-empty-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="20" x2="18" y2="10"></line>
-            <line x1="12" y1="20" x2="12" y2="4"></line>
-            <line x1="6" y1="20" x2="6" y2="14"></line>
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
           </svg>
         </div>
-        <strong>Sem evolução no período</strong>
-        <span>A curva de gastos acumulados aparecerá assim que você registrar despesas no período.</span>
+        <strong>Sem dados para evolução temporal</strong>
+        <span>Os gastos acumulados ao longo do tempo aparecerão aqui.</span>
       </div>`;
     return;
   }
 
-  const totalsByDay = new Map();
-  expenses.forEach((entry) => {
-    totalsByDay.set(entry.date, (totalsByDay.get(entry.date) || 0) + entry.value_cents);
-  });
-  const points = [...totalsByDay.entries()].map(([date, value]) => ({ date, value }));
-
-  let running = 0;
-  points.forEach((point) => {
-    running += point.value;
-    point.total = running;
+  const map = new Map();
+  expenses.forEach((e) => {
+    map.set(e.date, (map.get(e.date) || 0) + e.value_cents);
   });
 
-  const max = Math.max(...points.map((p) => p.total), 1);
+  const dates = Array.from(map.keys()).sort();
+  let acc = 0;
+  const points = dates.map((d) => {
+    acc += map.get(d);
+    return { date: d, total: acc };
+  });
+
   const finalTotal = points[points.length - 1].total;
+  const max = Math.max(finalTotal, 1);
 
   const svgWidth = 600;
-  const svgHeight = 200;
+  const svgHeight = 180;
   const padL = 60;
-  const padR = 25;
-  const padT = 25;
-  const padB = 25;
+  const padR = 20;
+  const padT = 20;
+  const padB = 30;
   const innerW = svgWidth - padL - padR;
   const innerH = svgHeight - padT - padB;
 
-  // Linhas de Grade e Eixo Y
-  const gridLines = [0, 1, 2, 3]
-    .map((i) => {
-      const y = padT + (innerH / 3) * i;
-      const val = Math.round(max - (max / 3) * i);
-      return `
-        <line x1="${padL}" y1="${y}" x2="${svgWidth - padR}" y2="${y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3" />
-        <text x="${padL - 8}" y="${y + 4}" text-anchor="end" class="timeline-axis-label">${money(val)}</text>
-      `;
-    })
-    .join("");
+  const gridSteps = 3;
+  let gridLines = "";
+  for (let i = 0; i <= gridSteps; i++) {
+    const yVal = (max / gridSteps) * i;
+    const yPos = padT + innerH - (i / gridSteps) * innerH;
+    gridLines += `
+      <line x1="${padL}" y1="${yPos}" x2="${svgWidth - padR}" y2="${yPos}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="4 4" />
+      <text x="${padL - 8}" y="${yPos + 4}" text-anchor="end" class="timeline-axis-label">${money(yVal)}</text>`;
+  }
 
-  // Cálculo das Coordenadas dos Pontos
   const coords = points.map((p, idx) => {
     const x = points.length === 1 ? padL + innerW / 2 : padL + (idx / (points.length - 1)) * innerW;
     const y = padT + innerH - (p.total / max) * innerH;
@@ -1327,15 +1773,15 @@ function renderTimelineChart() {
         <svg viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="none" class="timeline-svg" aria-label="Gráfico de Evolução">
           <defs>
             <linearGradient id="timelineGoldGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#FDB72D" stop-opacity="0.35"/>
-              <stop offset="100%" stop-color="#FDB72D" stop-opacity="0.0"/>
+              <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="#F59E0B" stop-opacity="0.0"/>
             </linearGradient>
           </defs>
           ${gridLines}
           <path d="${areaPath}" fill="url(#timelineGoldGrad)" />
-          <path d="${linePath}" fill="none" stroke="#E5A324" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-          <circle cx="${lastCoord.x.toFixed(1)}" cy="${lastCoord.y.toFixed(1)}" r="6" fill="#E5A324" />
-          <circle cx="${lastCoord.x.toFixed(1)}" cy="${lastCoord.y.toFixed(1)}" r="3" fill="#070604" />
+          <path d="${linePath}" fill="none" stroke="#F59E0B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="${lastCoord.x.toFixed(1)}" cy="${lastCoord.y.toFixed(1)}" r="5" fill="#F59E0B" />
+          <circle cx="${lastCoord.x.toFixed(1)}" cy="${lastCoord.y.toFixed(1)}" r="2.5" fill="#09090B" />
         </svg>
       </div>
     </div>`;
@@ -1359,7 +1805,7 @@ function renderCategory(key) {
         <div class="kpi-tile"><span>Saldo Inicial</span><strong>${money(vr.initial_cents)}</strong></div>
         <div class="kpi-tile"><span>Total Recebido</span><strong style="color:var(--success)">+${money(vr.received_cents)}</strong></div>
         <div class="kpi-tile"><span>Total Gasto</span><strong style="color:var(--danger)">-${money(vr.spent_cents)}</strong></div>
-        <div class="kpi-tile"><span>Saldo Atual</span><strong style="color:var(--primary-dark)">${money(vr.balance_cents)}</strong></div>
+        <div class="kpi-tile"><span>Saldo Atual</span><strong style="color:var(--primary)">${money(vr.balance_cents)}</strong></div>
       </div>`
     );
   } else {
@@ -1368,9 +1814,9 @@ function renderCategory(key) {
       "beforeend",
       `<div class="category-summary-title">Resumo - ${labels[key]}</div>
       <div class="category-kpi-grid">
-        <div class="kpi-tile"><span>Planejado (${key === 'needs' ? '50%' : key === 'wants' ? '30%' : '20%'})</span><strong>${money(budget.planned_cents)}</strong></div>
+        <div class="kpi-tile"><span>Planejado (${key === "needs" ? "50%" : key === "wants" ? "30%" : "20%"})</span><strong>${money(budget.planned_cents)}</strong></div>
         <div class="kpi-tile"><span>Realizado</span><strong>${money(budget.spent_cents)}</strong></div>
-        <div class="kpi-tile"><span>Saldo Restante</span><strong style="color:${budget.remaining_cents >= 0 ? 'var(--success)' : 'var(--danger)'}">${money(budget.remaining_cents)}</strong></div>
+        <div class="kpi-tile"><span>Saldo Restante</span><strong style="color:${budget.remaining_cents >= 0 ? "var(--success)" : "var(--danger)"}">${money(budget.remaining_cents)}</strong></div>
         <div class="kpi-tile"><span>% Utilizado</span><strong>${budget.usage_percent.toFixed(1)}%</strong></div>
       </div>`
     );
@@ -1407,10 +1853,8 @@ function renderEntryList(container, entries) {
     return;
   }
 
-  // Ordena por data decrescente
   const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
 
-  // Agrupamento por dia
   const groups = new Map();
   sorted.forEach((entry) => {
     if (!groups.has(entry.date)) groups.set(entry.date, []);
@@ -1454,7 +1898,7 @@ function renderEntryList(container, entries) {
                   <span>${escapeHtml(entry.category)}</span>
                   <span>•</span>
                   <span>${escapeHtml(entry.payment_method)}</span>
-                  ${noteText ? '<span>•</span>' + noteText : ''}
+                  ${noteText ? "<span>•</span>" + noteText : ""}
                 </div>
               </div>
             </div>
@@ -1494,9 +1938,14 @@ function renderEntryList(container, entries) {
 
 function setupCurrencyMasks() {
   const currencyInputs = [
-    els.settingsForm.monthly_income,
-    els.settingsForm.vr_initial,
+    els.settingsForm?.monthly_income,
+    els.settingsForm?.vr_initial,
+    els.settingsForm?.needs_goal,
+    els.settingsForm?.wants_goal,
     els.entryValueInput,
+    document.querySelector("#goal-target"),
+    document.querySelector("#goal-current"),
+    document.querySelector("#goal-contribution"),
   ];
 
   currencyInputs.forEach((input) => {
@@ -1519,49 +1968,89 @@ function setupCurrencyMasks() {
 
 function parseMoney(value) {
   if (typeof value === "number") return Math.round(value);
-  let raw = String(value || "").trim().replace(/\s/g, "").replace("R$", "");
-  if (!raw) return 0;
-  
-  if (raw.includes(",") && raw.includes(".")) {
-    raw = raw.replace(/\./g, "").replace(",", ".");
-  } else if (raw.includes(",")) {
-    raw = raw.replace(",", ".");
-  }
-  
-  const number = Number(raw);
-  if (Number.isNaN(number) || number < 0) {
-    throw new Error("Informe um valor numérico válido.");
-  }
-  return Math.round(number * 100);
-}
-
-function money(cents) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format((cents || 0) / 100);
+  if (!value) return 0;
+  const cleaned = String(value)
+    .replace(/[R$\s.]/g, "")
+    .replace(",", ".");
+  const num = Number(cleaned);
+  if (Number.isNaN(num)) return 0;
+  return Math.round(num * 100);
 }
 
 function formatInputMoney(cents) {
-  return ((cents || 0) / 100).toLocaleString("pt-BR", {
+  if (typeof cents !== "number" || Number.isNaN(cents) || cents === 0) return "";
+  const num = cents / 100;
+  return num.toLocaleString("pt-BR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 }
 
-function formatDate(value) {
-  if (!value) return "";
-  const parts = value.split("-");
-  if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  }
-  return new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR");
+function money(cents) {
+  const num = (Number(cents) || 0) / 100;
+  return num.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
 }
 
-function text(selector, value) {
+function formatDate(isoStr) {
+  if (!isoStr) return "--";
+  const [y, m, d] = isoStr.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function toDateInput(date) {
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function text(selector, val) {
   const el = document.querySelector(selector);
-  if (el) el.textContent = value;
+  if (el) el.textContent = val;
 }
 
-function escapeHtml(value) {
-  return String(value || "")
+function showAlert(target, text) {
+  if (!target) return;
+  target.textContent = text;
+  target.hidden = false;
+}
+
+function hideAlert(target) {
+  if (!target) return;
+  target.textContent = "";
+  target.hidden = true;
+}
+
+function showToast(message, duration = 3000) {
+  if (!els.toast) return;
+  els.toastText.textContent = message;
+  els.toast.hidden = false;
+
+  clearTimeout(toastTimeout);
+  clearTimeout(toastFadeTimeout);
+
+  toastTimeout = setTimeout(() => {
+    els.toast.hidden = true;
+  }, duration);
+}
+
+function showConfirm(title, description, okText = "Confirmar") {
+  els.confirmTitle.textContent = title;
+  els.confirmDesc.textContent = description;
+  els.confirmOk.textContent = okText;
+  els.confirmDialog.showModal();
+
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+  });
+}
+
+function escapeHtml(str) {
+  return String(str || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -1569,35 +2058,98 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
-function showToast(message, duration = 3000) {
-  els.toastText.textContent = message;
-  els.toast.hidden = false;
-  els.toast.classList.remove("toast-fade-out");
+/* ==========================================================================
+   FILTERING & PRESETS ENGINE
+   ========================================================================== */
 
-  clearTimeout(toastTimeout);
-  clearTimeout(toastFadeTimeout);
+function defaultFilters() {
+  const now = new Date();
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-  toastFadeTimeout = setTimeout(() => {
-    els.toast.classList.add("toast-fade-out");
-  }, Math.max(duration - 350, 1000));
-
-  toastTimeout = setTimeout(() => {
-    els.toast.hidden = true;
-    els.toast.classList.remove("toast-fade-out");
-  }, duration);
+  return {
+    preset: "current-month",
+    startDate: toDateInput(firstDay),
+    endDate: toDateInput(lastDay),
+    search: "",
+  };
 }
 
-function showAlert(el, msg) {
-  el.textContent = msg;
-  el.hidden = false;
-  clearTimeout(el.timeout);
-  el.timeout = setTimeout(() => {
-    hideAlert(el);
-  }, 5000);
+function handlePresetChange(preset) {
+  state.activePreset = preset;
+  state.filters.preset = preset;
+
+  const now = new Date();
+  let start = null;
+  let end = null;
+
+  if (preset === "current-month") {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  } else if (preset === "last-month") {
+    start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    end = new Date(now.getFullYear(), now.getMonth(), 0);
+  } else if (preset === "last-30") {
+    start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    end = now;
+  } else if (preset === "last-90") {
+    start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    end = now;
+  } else if (preset === "current-year") {
+    start = new Date(now.getFullYear(), 0, 1);
+    end = new Date(now.getFullYear(), 11, 31);
+  } else if (preset === "all") {
+    start = null;
+    end = null;
+  }
+
+  state.filters.startDate = start ? toDateInput(start) : "";
+  state.filters.endDate = end ? toDateInput(end) : "";
+
+  els.filtersForm.start_date.value = state.filters.startDate;
+  els.filtersForm.end_date.value = state.filters.endDate;
+
+  updatePresetButtonsUI();
+  recalculateAndRender();
 }
 
-function hideAlert(el) {
-  el.hidden = true;
-  el.textContent = "";
+function handleCustomDateChange() {
+  state.filters.startDate = els.filtersForm.start_date.value;
+  state.filters.endDate = els.filtersForm.end_date.value;
+  state.activePreset = "custom";
+  state.filters.preset = "custom";
+
+  updatePresetButtonsUI();
+  recalculateAndRender();
 }
 
+function handleSearchInput(event) {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    state.filters.search = (event.target.value || "").trim().toLowerCase();
+    filterEntries();
+    render();
+  }, 200);
+}
+
+function updatePresetButtonsUI() {
+  els.presetButtons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.preset === state.activePreset);
+  });
+}
+
+function filterEntries() {
+  const { startDate, endDate, search } = state.filters;
+
+  state.filteredEntries = state.rawEntries.filter((entry) => {
+    if (startDate && entry.date < startDate) return false;
+    if (endDate && entry.date > endDate) return false;
+
+    if (search) {
+      const target = `${entry.description} ${entry.category} ${entry.payment_method} ${entry.note || ""}`.toLowerCase();
+      if (!target.includes(search)) return false;
+    }
+
+    return true;
+  });
+}

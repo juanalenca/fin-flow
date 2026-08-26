@@ -1,7 +1,7 @@
 {
-  "version": "1.0.4",
-  "versionCode": 4,
+  "version": "1.0.5",
+  "versionCode": 5,
   "apkUrl": "https://github.com/juanalenca/fin-flow/releases/latest/download/FinFlow-Release-Signed.apk",
-  "notes": "Correção definitiva do design dos modais de Login e Novo Lançamento: sem barras pretas laterais, botão de fechar proeminente, campos escuros elegantes e fechamento por toque no fundo.",
+  "notes": "Evolução FinFlow: Gestão Dinâmica 50/30/20, Mapa de Objetivos Financeiros, Proteção dos Investimentos, Redistribuição de Sobras e Fechamento Mensal.",
   "releasedAt": "2026-08-26"
 }

@@ -1069,6 +1069,134 @@ button:active {
 }
 
 /* ==========================================================================
+   GESTÃO ORÇAMENTÁRIA DINÂMICA & OBJETIVOS
+   ========================================================================== */
+.dynamic-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, .85fr);
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.dynamic-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-xs);
+}
+
+.dynamic-panel-wide { grid-column: 1 / -1; }
+
+.dynamic-panel-head, .goal-card-head, .goals-view-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.dynamic-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.dynamic-desc {
+  margin-top: 3px;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.month-label, .status-badge, .fund-type {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.budget-ledger { display: grid; gap: 10px; }
+
+.budget-ledger-row {
+  display: grid;
+  grid-template-columns: 120px repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+}
+
+.ledger-name { display: flex; align-items: center; gap: 8px; font-size: .84rem; font-weight: 800; color: var(--text-main); }
+.ledger-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.ledger-value { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ledger-value span { color: var(--text-subtle); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.ledger-value strong { color: var(--text-main); font-size: .86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ledger-value.positive strong { color: var(--success); }
+.ledger-value.negative strong { color: #F87171; }
+
+.investment-commitment {
+  padding: 16px;
+  border: 1px solid var(--color-savings-border);
+  background: linear-gradient(135deg, rgba(59, 130, 246, .12), rgba(59, 130, 246, .03));
+  border-radius: var(--radius-md);
+}
+.investment-commitment .dynamic-title { color: #BFDBFE; }
+.commitment-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 14px; }
+.commitment-grid span { display: block; color: #93C5FD; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.commitment-grid strong { display: block; margin-top: 3px; color: var(--text-white); font-size: .95rem; }
+
+.notice-list, .fund-list, .recommendation-list { display: grid; gap: 10px; }
+.notice-card, .fund-row, .recommendation-card {
+  padding: 13px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  border-radius: var(--radius-md);
+}
+.notice-card.deficit { border-color: rgba(220, 38, 38, .38); background: rgba(220, 38, 38, .08); }
+.notice-title, .fund-title { display: flex; align-items: center; gap: 8px; font-size: .86rem; font-weight: 800; color: var(--text-main); }
+.notice-copy, .fund-copy, .recommendation-card p { margin-top: 5px; color: var(--text-muted); font-size: .8rem; font-weight: 600; line-height: 1.42; }
+.compensation-form, .fund-actions { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 12px; }
+.compensation-form select, .compensation-form input, .fund-actions select, .fund-actions input { min-width: 0; padding: 8px 9px; font-size: .8rem; }
+.compensation-form .btn, .fund-actions .btn { padding: 8px 11px; font-size: .78rem; white-space: nowrap; }
+.recommendation-card { border-color: var(--color-wants-border); }
+.recommendation-card strong { color: var(--text-gold); font-size: .82rem; }
+
+.month-close-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 4px; }
+.month-close-bar p { color: var(--text-muted); font-size: .8rem; font-weight: 600; max-width: 65ch; }
+
+.goals-view-header { margin-bottom: 18px; }
+.goals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(285px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.goal-card { padding: 18px; border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-xs); }
+.goal-card h3 { color: var(--text-main); font-size: 1.05rem; font-weight: 800; }
+.goal-card p { margin-top: 3px; color: var(--text-muted); font-size: .8rem; }
+.goal-amounts { display: flex; align-items: baseline; gap: 5px; margin: 16px 0 10px; }
+.goal-amounts strong { color: var(--text-white); font-size: 1.35rem; }
+.goal-amounts span { color: var(--text-muted); font-size: .82rem; font-weight: 700; }
+.goal-progress-track { height: 8px; overflow: hidden; border-radius: 999px; background: var(--surface-subtle); border: 1px solid var(--border); }
+.goal-progress-fill { height: 100%; background: var(--color-savings); border-radius: inherit; }
+.goal-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.goal-meta span { display: block; font-size: .68rem; font-weight: 800; color: var(--text-subtle); text-transform: uppercase; }
+.goal-meta strong { display: block; margin-top: 2px; color: var(--text-main); font-size: .82rem; }
+.status-badge.status-atingido, .status-badge.status-adiantado { color: #6EE7B7; border-color: var(--color-needs-border); background: var(--color-needs-bg); }
+.status-badge.status-abaixo_do_ritmo, .status-badge.status-atrasado { color: #FCD34D; border-color: var(--color-wants-border); background: var(--color-wants-bg); }
+
+.goal-form { margin-top: 0; }
+.goal-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.goal-form-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+/* ==========================================================================
    VIEW 2: CATEGORIA ESPECÍFICA (50%, 30%, 20%, VR)
    ========================================================================== */
 
@@ -2187,4 +2315,16 @@ dialog.modern-modal[open] {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
+
+  .dynamic-workspace { grid-template-columns: 1fr; gap: 14px; }
+  .dynamic-panel { padding: 16px; }
+  .budget-ledger-row { grid-template-columns: 1fr 1fr; gap: 9px; }
+  .ledger-name { grid-column: 1 / -1; }
+  .commitment-grid { grid-template-columns: 1fr 1fr; }
+  .compensation-form, .fund-actions { grid-template-columns: 1fr 1fr; }
+  .compensation-form .btn, .fund-actions .btn { grid-column: 1 / -1; justify-content: center; }
+  .month-close-bar { align-items: stretch; flex-direction: column; }
+  .month-close-bar .btn { width: 100%; justify-content: center; }
+  .goal-form-grid { grid-template-columns: 1fr; }
+  .goal-meta { grid-template-columns: 1fr 1fr; }
 }

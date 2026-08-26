@@ -14,7 +14,7 @@
     <link rel="apple-touch-icon" href="icon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=1.0.4">
+    <link rel="stylesheet" href="styles.css?v=1.0.5">
     <script src="capacitor.js"></script>
   </head>
   <body>
@@ -70,6 +70,11 @@
             <button class="nav-btn" data-view="entries">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
               <span>Todos Lançamentos</span>
+            </button>
+
+            <button class="nav-btn" data-view="goals">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="m16.5 5.5 2-2"/></svg>
+              <span>Objetivos</span>
             </button>
           </nav>
         </div>
@@ -174,6 +179,20 @@
               <div class="input-currency-wrapper">
                 <span class="currency-prefix">R$</span>
                 <input id="setting-vr-initial" name="vr_initial" inputmode="numeric" placeholder="0,00">
+              </div>
+            </div>
+            <div class="field-item">
+              <label for="setting-needs-goal">Meta de gasto: Necessidades</label>
+              <div class="input-currency-wrapper">
+                <span class="currency-prefix">R$</span>
+                <input id="setting-needs-goal" name="needs_goal" inputmode="numeric" placeholder="Opcional">
+              </div>
+            </div>
+            <div class="field-item">
+              <label for="setting-wants-goal">Meta de gasto: Desejos</label>
+              <div class="input-currency-wrapper">
+                <span class="currency-prefix">R$</span>
+                <input id="setting-wants-goal" name="wants_goal" inputmode="numeric" placeholder="Opcional">
               </div>
             </div>
             <div class="field-actions">
@@ -294,6 +313,8 @@
               <div class="chart-container" id="timeline-chart-wrap"></div>
             </div>
           </div>
+
+          <section id="dynamic-workspace" class="dynamic-workspace" aria-label="Gestão mensal inteligente"></section>
         </section>
 
         <!-- VIEW 2: CATEGORIA / CARTEIRA ESPECÍFICA (50%, 30%, 20% ou VR) -->
@@ -326,6 +347,36 @@
             <div id="entries-list" class="entries-stream-list"></div>
           </div>
         </section>
+
+        <section id="goals-view" class="view-panel">
+          <div class="goals-view-header">
+            <div>
+              <h2 class="card-analytics-title">Mapa de objetivos</h2>
+              <p class="card-analytics-desc">Planos pessoais, progresso e ritmo de contribuição.</p>
+            </div>
+          </div>
+          <div id="goals-list" class="goals-grid"></div>
+          <form id="goal-form" class="goal-form card-analytics" novalidate>
+            <div class="card-analytics-head">
+              <div>
+                <h2 class="card-analytics-title">Novo objetivo</h2>
+                <span class="card-analytics-desc">Crie metas livres: reserva, viagem, curso ou o que fizer sentido para você.</span>
+              </div>
+            </div>
+            <div class="goal-form-grid">
+              <div class="field-item"><label for="goal-name">Nome</label><input id="goal-name" name="name" maxlength="80" placeholder="Ex.: Reserva de emergência" required></div>
+              <div class="field-item"><label for="goal-type">Tipo</label><input id="goal-type" name="type" maxlength="40" placeholder="Ex.: Segurança"></div>
+              <div class="field-item"><label for="goal-target">Valor-alvo</label><div class="input-currency-wrapper"><span class="currency-prefix">R$</span><input id="goal-target" name="target" inputmode="numeric" placeholder="0,00" required></div></div>
+              <div class="field-item"><label for="goal-current">Valor atual</label><div class="input-currency-wrapper"><span class="currency-prefix">R$</span><input id="goal-current" name="current" inputmode="numeric" placeholder="0,00"></div></div>
+              <div class="field-item"><label for="goal-start">Data inicial</label><input id="goal-start" name="start" type="date"></div>
+              <div class="field-item"><label for="goal-due">Prazo</label><input id="goal-due" name="due" type="date"></div>
+              <div class="field-item"><label for="goal-contribution">Aporte desejado / mês</label><div class="input-currency-wrapper"><span class="currency-prefix">R$</span><input id="goal-contribution" name="contribution" inputmode="numeric" placeholder="Opcional"></div></div>
+              <div class="field-item"><label for="goal-priority">Prioridade</label><select id="goal-priority" name="priority"><option value="normal">Normal</option><option value="alta">Alta</option><option value="baixa">Baixa</option></select></div>
+            </div>
+            <div class="field-item"><label for="goal-description">Descrição</label><textarea id="goal-description" name="description" rows="2" maxlength="280" placeholder="O que este objetivo representa?"></textarea></div>
+            <div class="goal-form-actions"><button class="btn btn-primary" type="submit">Criar objetivo</button></div>
+          </form>
+        </section>
       </main>
 
       <!-- MOBILE BOTTOM NAVIGATION (GLASS DOCK) -->
@@ -348,6 +399,10 @@
         <button class="mob-nav-item" data-view="savings">
           <span class="nav-dot dot-savings"></span>
           <span>20%</span>
+        </button>
+        <button class="mob-nav-item" data-view="goals">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <span>Metas</span>
         </button>
         <button class="mob-nav-item" data-view="vr">
           <span class="nav-dot dot-vr"></span>
@@ -638,7 +693,6 @@
     </div>
 
     <!-- SCRIPT DA APLICAÇÃO (FIREBASE INTEGRADO) -->
-    <script type="module" src="app.js?v=1.0.4"></script>
+    <script type="module" src="app.js?v=1.0.5"></script>
   </body>
 </html>
-
