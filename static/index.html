@@ -456,110 +456,112 @@
           </button>
         </header>
 
-        <form id="entry-form" method="dialog" class="modal-form">
-          <input type="hidden" name="id">
-          <input type="hidden" name="budget_type" id="hidden-budget-type" value="needs">
-          <input type="hidden" name="entry_kind" id="hidden-entry-kind" value="expense">
+        <form id="entry-form" method="dialog" class="modal-form-wrapper">
+          <div class="modal-body-scroll">
+            <input type="hidden" name="id">
+            <input type="hidden" name="budget_type" id="hidden-budget-type" value="needs">
+            <input type="hidden" name="entry_kind" id="hidden-entry-kind" value="expense">
 
-          <!-- VALOR EM DESTAQUE (HERO DISPLAY) -->
-          <div class="entry-amount-hero">
-            <span class="amount-hero-label">Valor da Movimentação</span>
-            <div class="amount-hero-input-wrap">
-              <span class="amount-hero-prefix">R$</span>
-              <input id="entry-value" name="value" class="amount-hero-field" inputmode="numeric" placeholder="0,00" required autofocus>
+            <!-- VALOR EM DESTAQUE (HERO DISPLAY) -->
+            <div class="entry-amount-hero">
+              <span class="amount-hero-label">Valor da Movimentação</span>
+              <div class="amount-hero-input-wrap">
+                <span class="amount-hero-prefix">R$</span>
+                <input id="entry-value" name="value" class="amount-hero-field" inputmode="numeric" placeholder="0,00" required autofocus>
+              </div>
             </div>
-          </div>
 
-          <!-- SELETOR DE ORÇAMENTO EM CHIPS COLORIDOS -->
-          <div class="budget-chips-group">
-            <label class="group-label">Destino do Orçamento</label>
-            <div class="budget-chips-grid">
-              <button type="button" class="budget-chip chip-needs active" data-budget="needs">
-                <div class="chip-header">
-                  <span class="chip-dot"></span>
-                  <span class="chip-title">50% Necessidades</span>
-                </div>
-                <span class="chip-sub">Essencial</span>
-              </button>
-              <button type="button" class="budget-chip chip-wants" data-budget="wants">
-                <div class="chip-header">
-                  <span class="chip-dot"></span>
-                  <span class="chip-title">30% Desejos</span>
-                </div>
-                <span class="chip-sub">Estilo / Lazer</span>
-              </button>
-              <button type="button" class="budget-chip chip-savings" data-budget="savings">
-                <div class="chip-header">
-                  <span class="chip-dot"></span>
-                  <span class="chip-title">20% Reserva</span>
-                </div>
-                <span class="chip-sub">Investimentos</span>
-              </button>
-              <button type="button" class="budget-chip chip-vr" data-budget="vr">
-                <div class="chip-header">
-                  <span class="chip-dot"></span>
-                  <span class="chip-title">Carteira VR</span>
-                </div>
-                <span class="chip-sub">Alimentação</span>
-              </button>
+            <!-- SELETOR DE ORÇAMENTO EM CHIPS COLORIDOS -->
+            <div class="budget-chips-group">
+              <label class="group-label">Destino do Orçamento</label>
+              <div class="budget-chips-grid">
+                <button type="button" class="budget-chip chip-needs active" data-budget="needs">
+                  <div class="chip-header">
+                    <span class="chip-dot"></span>
+                    <span class="chip-title">50% Necessidades</span>
+                  </div>
+                  <span class="chip-sub">Essencial</span>
+                </button>
+                <button type="button" class="budget-chip chip-wants" data-budget="wants">
+                  <div class="chip-header">
+                    <span class="chip-dot"></span>
+                    <span class="chip-title">30% Desejos</span>
+                  </div>
+                  <span class="chip-sub">Estilo / Lazer</span>
+                </button>
+                <button type="button" class="budget-chip chip-savings" data-budget="savings">
+                  <div class="chip-header">
+                    <span class="chip-dot"></span>
+                    <span class="chip-title">20% Reserva</span>
+                  </div>
+                  <span class="chip-sub">Investimentos</span>
+                </button>
+                <button type="button" class="budget-chip chip-vr" data-budget="vr">
+                  <div class="chip-header">
+                    <span class="chip-dot"></span>
+                    <span class="chip-title">Carteira VR</span>
+                  </div>
+                  <span class="chip-sub">Alimentação</span>
+                </button>
+              </div>
             </div>
-          </div>
 
-          <!-- TIPO DE MOVIMENTAÇÃO (SE VR) -->
-          <div id="vr-kind-toggle-wrapper" class="vr-movement-group" hidden>
-            <label class="group-label">Tipo de Movimento VR</label>
-            <div class="segmented-movement">
-              <button type="button" class="segment-btn active" data-kind="expense">Despesa (Gasto)</button>
-              <button type="button" class="segment-btn" data-kind="income">Recebimento (Crédito)</button>
+            <!-- TIPO DE MOVIMENTAÇÃO (SE VR) -->
+            <div id="vr-kind-toggle-wrapper" class="vr-movement-group" hidden>
+              <label class="group-label">Tipo de Movimento VR</label>
+              <div class="segmented-movement">
+                <button type="button" class="segment-btn active" data-kind="expense">Despesa (Gasto)</button>
+                <button type="button" class="segment-btn" data-kind="income">Recebimento (Crédito)</button>
+              </div>
             </div>
-          </div>
 
-          <!-- DESCRIÇÃO -->
-          <div class="field-item">
-            <label for="entry-description">Descrição</label>
-            <input id="entry-description" name="description" placeholder="Ex: Supermercado, Aluguel, Farmácia, Restaurante..." maxlength="120" required>
-          </div>
-
-          <!-- CATEGORIA COM TAGS RÁPIDAS -->
-          <div class="field-item">
-            <div class="label-row">
-              <label for="entry-category">Categoria</label>
-              <span class="label-hint">Clique para preencher rápido:</span>
-            </div>
-            <input id="entry-category" name="category" placeholder="Ex: Alimentação, Moradia, Transporte..." maxlength="80" required>
-            
-            <div class="quick-category-pills">
-              <button type="button" class="cat-pill" data-cat="Alimentação">Alimentação</button>
-              <button type="button" class="cat-pill" data-cat="Supermercado">Supermercado</button>
-              <button type="button" class="cat-pill" data-cat="Moradia">Moradia</button>
-              <button type="button" class="cat-pill" data-cat="Transporte">Transporte</button>
-              <button type="button" class="cat-pill" data-cat="Saúde">Saúde</button>
-              <button type="button" class="cat-pill" data-cat="Lazer">Lazer</button>
-              <button type="button" class="cat-pill" data-cat="Investimento">Investimento</button>
-              <button type="button" class="cat-pill" data-cat="Assinaturas">Assinaturas</button>
-            </div>
-          </div>
-
-          <div class="form-row-2">
+            <!-- DESCRIÇÃO -->
             <div class="field-item">
-              <label for="entry-date">Data</label>
-              <input id="entry-date" name="date" type="date" required>
+              <label for="entry-description">Descrição</label>
+              <input id="entry-description" name="description" placeholder="Ex: Supermercado, Aluguel, Farmácia, Restaurante..." maxlength="120" required>
+            </div>
+
+            <!-- CATEGORIA COM TAGS RÁPIDAS -->
+            <div class="field-item">
+              <div class="label-row">
+                <label for="entry-category">Categoria</label>
+                <span class="label-hint">Clique para preencher rápido:</span>
+              </div>
+              <input id="entry-category" name="category" placeholder="Ex: Alimentação, Moradia, Transporte..." maxlength="80" required>
+              
+              <div class="quick-category-pills">
+                <button type="button" class="cat-pill" data-cat="Alimentação">Alimentação</button>
+                <button type="button" class="cat-pill" data-cat="Supermercado">Supermercado</button>
+                <button type="button" class="cat-pill" data-cat="Moradia">Moradia</button>
+                <button type="button" class="cat-pill" data-cat="Transporte">Transporte</button>
+                <button type="button" class="cat-pill" data-cat="Saúde">Saúde</button>
+                <button type="button" class="cat-pill" data-cat="Lazer">Lazer</button>
+                <button type="button" class="cat-pill" data-cat="Investimento">Investimento</button>
+                <button type="button" class="cat-pill" data-cat="Assinaturas">Assinaturas</button>
+              </div>
+            </div>
+
+            <div class="form-row-2">
+              <div class="field-item">
+                <label for="entry-date">Data</label>
+                <input id="entry-date" name="date" type="date" required>
+              </div>
+
+              <div class="field-item">
+                <label for="entry-payment-method">Forma de Pagamento</label>
+                <input id="entry-payment-method" name="payment_method" placeholder="Ex: Cartão de Crédito, Pix, Débito, VR..." maxlength="80" required>
+              </div>
             </div>
 
             <div class="field-item">
-              <label for="entry-payment-method">Forma de Pagamento</label>
-              <input id="entry-payment-method" name="payment_method" placeholder="Ex: Cartão de Crédito, Pix, Débito, VR..." maxlength="80" required>
+              <label for="entry-note">Observações (Opcional)</label>
+              <textarea id="entry-note" name="note" maxlength="500" rows="2" placeholder="Notas adicionais..."></textarea>
             </div>
+
+            <div id="entry-message" class="alert-message" role="status" hidden></div>
           </div>
 
-          <div class="field-item">
-            <label for="entry-note">Observações (Opcional)</label>
-            <textarea id="entry-note" name="note" maxlength="500" rows="2" placeholder="Notas adicionais..."></textarea>
-          </div>
-
-          <div id="entry-message" class="alert-message" role="status" hidden></div>
-
-          <footer class="modal-actions">
+          <footer class="modal-actions-bar">
             <button class="btn btn-danger-ghost" type="button" id="delete-entry" hidden>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               <span>Excluir</span>

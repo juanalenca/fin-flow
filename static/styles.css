@@ -1401,28 +1401,39 @@ dialog.modern-modal[open] {
   display: block;
 }
 
-.modal-form, .auth-modal-body {
-  padding: 24px;
+.modal-form-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.modal-body-scroll, .auth-modal-body {
+  padding: 22px 24px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 18px;
+  flex: 1;
+  min-height: 0;
 }
 
-.modal-actions {
+.modal-actions-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  background-color: var(--surface-subtle);
+  background-color: var(--surface-raised);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
+  gap: 12px;
 }
 
 .modal-actions-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-left: auto;
 }
 
@@ -2136,6 +2147,26 @@ dialog.modern-modal[open] {
     border-radius: var(--radius-full);
     margin: 12px auto 4px;
     flex-shrink: 0;
+  }
+
+  .modal-body-scroll {
+    padding: 16px 16px 20px;
+  }
+
+  .modal-actions-bar {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .modal-actions-right {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 10px;
+  }
+
+  .modal-actions-right .btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .form-row-2 {
