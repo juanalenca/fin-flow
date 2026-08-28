@@ -688,6 +688,20 @@ function saveGuestData() {
 function initFirestoreListeners(user) {
   cleanupListeners();
 
+  // Salva dados de perfil no documento raiz users/{uid} para fácil visualização no console
+  setDoc(
+    doc(db, "users", user.uid),
+    {
+      uid: user.uid,
+      email: user.email || "",
+      displayName: user.displayName || user.email?.split("@")[0] || "Usuário",
+      photoURL: user.photoURL || "",
+      providerId: user.providerData?.[0]?.providerId || "password",
+      lastLoginAt: new Date().toISOString(),
+    },
+    { merge: true }
+  ).catch((err) => console.warn("Aviso ao salvar perfil:", err));
+
   const settingsDocRef = doc(db, "users", user.uid, "meta", "settings");
   unsubscribeSettings = onSnapshot(settingsDocRef, (snap) => {
     if (snap.exists()) {
