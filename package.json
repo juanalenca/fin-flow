@@ -1,9 +1,11 @@
 {
   "name": "fin-flow",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "FinFlow - Gestão Financeira Pessoal Multiplataforma (Web, Android e iOS)",
   "main": "static/app.js",
+  "type": "module",
   "scripts": {
+    "test": "node static/financial-engine.test.mjs",
     "sync": "cap sync",
     "cap:sync": "cap sync",
     "cap:copy": "cap copy",
